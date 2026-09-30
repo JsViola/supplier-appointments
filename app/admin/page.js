@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar'
 import format from 'date-fns/format'
 import parse from 'date-fns/parse'
@@ -8,7 +9,6 @@ import startOfWeek from 'date-fns/startOfWeek'
 import getDay from 'date-fns/getDay'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { supabase } from '@/lib/supabaseClient'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './calendar.css'
 
 const locales = {}
@@ -21,9 +21,28 @@ const localizer = dateFnsLocalizer({
 })
 
 export default function AdminPage() {
+  const router = useRouter()
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [events, setEvents] = useState([])
   const [currentDate, setCurrentDate] = useState(new Date())
 
+  // Runs once when the page loads: confirms someone is logged in
+  // before showing any appointment data. Sends anyone not logged
+  // in straight to the login page.
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/admin/login')
+      } else {
+        setCheckingAuth(false)
+      }
+    }
+    checkAuth()
+  }, [])
+
+  // Runs once when the page loads: fetches every appointment row
+  // and converts each into an event object the calendar understands.
   useEffect(() => {
     async function loadAppointments() {
       const { data, error } = await supabase
@@ -53,9 +72,31 @@ export default function AdminPage() {
     loadAppointments()
   }, [])
 
+  // While the login check above is still running, show this instead
+  // of the calendar, so appointment data never briefly flashes on
+  // screen before the redirect happens.
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500">
+        Checking login…
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-semibold mb-4 text-gray-900">Delivery appointments</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-semibold text-gray-900">Delivery appointments</h1>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut()
+            router.push('/admin/login')
+          }}
+          className="text-sm text-gray-500 hover:text-gray-700"
+        >
+          Log out
+        </button>
+      </div>
       <div style={{ height: 650 }}>
         <Calendar
           localizer={localizer}
