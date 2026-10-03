@@ -101,3 +101,7 @@
   color: #2563eb;
   font-weight: 500;
 }
+
+.rbc-event {
+  min-height: 24px;
+}
