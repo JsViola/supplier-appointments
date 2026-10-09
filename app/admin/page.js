@@ -116,6 +116,31 @@ export default function AdminPage() {
     setSelectedAppt(null)
   }
 
+  // Saves the new status to Supabase, then updates both the calendar
+  // events and the open popup so the color and the dropdown change
+  // immediately without a reload.
+  async function handleStatusChange(apptId, newStatus) {
+    const { error } = await supabase
+      .from('appointments')
+      .update({ status: newStatus })
+      .eq('id', apptId)
+
+    if (error) {
+      console.error(error)
+      alert('Could not update the status. Please try again.')
+      return
+    }
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.resource.id === apptId
+          ? { ...e, resource: { ...e.resource, status: newStatus } }
+          : e
+      )
+    )
+    setSelectedAppt((prev) => (prev ? { ...prev, status: newStatus } : prev))
+  }
+
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500">
@@ -172,6 +197,7 @@ export default function AdminPage() {
             eventPropGetter={(event) => {
               const colors = {
                 pending: '#f59e0b',
+                delivered: '#16a34a',
                 confirmed: '#16a34a',
                 cancelled: '#dc2626',
               }
@@ -208,10 +234,26 @@ export default function AdminPage() {
 
             <div className="space-y-3 text-sm text-gray-700">
               <p><span className="font-medium text-gray-900">Supplier:</span> {selectedAppt.supplier}</p>
-              <p><span className="font-medium text-gray-900">Delivery terms:</span> {selectedAppt.delivery_terms || 'n/a'}</p>
+              <p>
+                <span className="font-medium text-gray-900">Delivery terms:</span>{' '}
+                {selectedAppt.delivery_terms ? `${selectedAppt.delivery_terms} days` : 'n/a'}
+                {selectedAppt.count_type &&
+                  ` · ${selectedAppt.count_type === 'working' ? 'Working Days' : 'Calendar Days'}`}
+              </p>
               <p><span className="font-medium text-gray-900">Delivery date:</span> {selectedAppt.tentative_delivery_date}</p>
               <p><span className="font-medium text-gray-900">Contact:</span> {selectedAppt.contact_number}</p>
-              <p><span className="font-medium text-gray-900">Status:</span> {selectedAppt.status}</p>
+
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-900">Status:</span>
+                <select
+                  value={selectedAppt.status}
+                  onChange={(e) => handleStatusChange(selectedAppt.id, e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </div>
 
               <div>
                 <p className="font-medium text-gray-900 mb-2">Items</p>
@@ -232,7 +274,7 @@ export default function AdminPage() {
 
               <button
                 onClick={() => handleDelete(selectedAppt.id)}
-                className="w-full mt-5 text-sm font-medium text-red-600 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition"
+                className="w-full mt-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition"
               >
                 Delete appointment
               </button>

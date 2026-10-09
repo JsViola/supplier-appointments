@@ -5,6 +5,7 @@ import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { supabase } from '@/lib/supabaseClient'
+import HospitalHeader from '@/components/HospitalHeader'
 import { getDeliveryWindow, isSelectableDeliveryDate } from '@/lib/holidays'
 
 // react-datepicker works with real Date objects, but we store dates as
@@ -22,6 +23,34 @@ function formatDate(date) {
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
+// Country calling codes offered in the contact number field. `min` and
+// `max` are the allowed digit counts AFTER the country code. +63 is
+// strict (Philippine mobile numbers are exactly 10 digits and start
+// with 9). The others are typical lengths, deliberately a little wide so
+// real numbers are not rejected; adjust any line, or add new ones, as
+// needed.
+const COUNTRY_CODES = [
+  { code: '+63', label: 'PH +63', min: 10, max: 10 },
+  { code: '+1', label: 'US/CA +1', min: 10, max: 10 },
+  { code: '+44', label: 'UK +44', min: 9, max: 10 },
+  { code: '+61', label: 'AU +61', min: 9, max: 9 },
+  { code: '+65', label: 'SG +65', min: 8, max: 8 },
+  { code: '+852', label: 'HK +852', min: 8, max: 8 },
+  { code: '+86', label: 'CN +86', min: 11, max: 11 },
+  { code: '+81', label: 'JP +81', min: 9, max: 10 },
+  { code: '+82', label: 'KR +82', min: 9, max: 10 },
+  { code: '+91', label: 'IN +91', min: 10, max: 10 },
+  { code: '+60', label: 'MY +60', min: 9, max: 10 },
+  { code: '+62', label: 'ID +62', min: 9, max: 12 },
+  { code: '+66', label: 'TH +66', min: 8, max: 9 },
+  { code: '+84', label: 'VN +84', min: 9, max: 10 },
+  { code: '+886', label: 'TW +886', min: 9, max: 9 },
+  { code: '+971', label: 'AE +971', min: 8, max: 9 },
+  { code: '+966', label: 'SA +966', min: 9, max: 9 },
+  { code: '+49', label: 'DE +49', min: 10, max: 12 },
+  { code: '+33', label: 'FR +33', min: 9, max: 9 },
+]
 
 const emptyItem = {
   item_name: '',
@@ -45,6 +74,8 @@ export default function BookPage() {
   const [items, setItems] = useState([{ ...emptyItem }])
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState(null)
+  const [countryCode, setCountryCode] = useState('+63')
+  const selectedCountry = COUNTRY_CODES.find((c) => c.code === countryCode)
 
   // Recalculates automatically whenever confirmation date, terms, or
   // count type change — null until all three are filled in.
@@ -83,6 +114,32 @@ export default function BookPage() {
     setForm({ ...form, po_number: formatted })
   }
 
+  // Keeps the contact number digits-only and within the allowed length.
+  // For +63 it also strips a pasted "63" or a leading 0, so typing or
+  // pasting 09267405329 or +639267405329 both become 9267405329.
+  function handleContactChange(e) {
+    let digits = e.target.value.replace(/\D/g, '')
+    if (countryCode === '+63') {
+      if (digits.startsWith('63')) digits = digits.slice(2)
+      if (digits.startsWith('0')) digits = digits.slice(1)
+    }
+    setForm({ ...form, contact_number: digits.slice(0, selectedCountry.max) })
+  }
+
+  function handleCountryChange(e) {
+    const newCode = e.target.value
+    const country = COUNTRY_CODES.find((c) => c.code === newCode)
+    setCountryCode(newCode)
+    setForm({ ...form, contact_number: form.contact_number.slice(0, country.max) })
+  }
+
+  function isContactValid() {
+    const n = form.contact_number
+    if (n.length < selectedCountry.min || n.length > selectedCountry.max) return false
+    if (countryCode === '+63' && !n.startsWith('9')) return false
+    return true
+  }
+
   function handleItemChange(index, e) {
     const updated = [...items]
     updated[index] = { ...updated[index], [e.target.name]: e.target.value }
@@ -108,6 +165,7 @@ export default function BookPage() {
       contact_number: '',
     })
     setItems([{ ...emptyItem }])
+    setCountryCode('+63')
     setError(null)
     setSubmitted(false)
   }
@@ -121,7 +179,19 @@ export default function BookPage() {
       return
     }
 
-    const { error } = await supabase.from('appointments').insert([{ ...form, items }])
+    if (!isContactValid()) {
+      setError(
+        countryCode === '+63'
+          ? 'Please enter a valid Philippine mobile number: 10 digits starting with 9.'
+          : `Please enter a valid contact number (${selectedCountry.min}-${selectedCountry.max} digits).`
+      )
+      return
+    }
+
+    // Saved as one string with the country code, for example +639267405329
+    const { error } = await supabase
+      .from('appointments')
+      .insert([{ ...form, contact_number: `${countryCode}${form.contact_number}`, items }])
 
     if (error) {
       setError('Something went wrong. Please try again.')
@@ -133,8 +203,10 @@ export default function BookPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm p-8 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-3 sm:px-4 py-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm p-6 sm:p-8 text-center">
+          <HospitalHeader />
+          <hr className="my-5 sm:my-6 border-gray-200" />
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">Request received</h1>
           <p className="text-gray-500 mb-6">We'll confirm your delivery appointment shortly.</p>
           <button
@@ -149,8 +221,10 @@ export default function BookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12">
-      <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm p-8">
+    <div className="min-h-screen bg-gray-50 px-3 sm:px-4 py-6 sm:py-12">
+      <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm p-5 sm:p-8">
+        <HospitalHeader />
+        <hr className="my-5 sm:my-6 border-gray-200" />
         <Link
           href="/"
           className="inline-block text-sm text-gray-500 hover:text-gray-700 mb-4"
@@ -188,7 +262,7 @@ export default function BookPage() {
               onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
             />
-            <p className="text-xs text-gray-400 mt-1">The date the P.O. was confirmed — this is when the delivery countdown starts, not today's date.</p>
+            <p className="text-xs text-gray-400 mt-1">The date the P.O. was confirmed.</p>
           </div>
 
           <div>
@@ -320,7 +394,7 @@ export default function BookPage() {
                         name="box_size"
                         value={item.box_size}
                         onChange={(e) => handleItemChange(index, e)}
-                        placeholder="e.g. 12x12x12 in"
+                        placeholder="e.g. small,medium,large,XL"
                       />
                     </div>
                   </div>
@@ -329,7 +403,38 @@ export default function BookPage() {
             </div>
           </div>
 
-          <Field label="Contact number" name="contact_number" value={form.contact_number} onChange={handleChange} required />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact number</label>
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={handleCountryChange}
+                className="w-28 flex-shrink-0 border border-gray-300 rounded-lg px-2 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
+              <input
+                name="contact_number"
+                type="tel"
+                inputMode="numeric"
+                required
+                value={form.contact_number}
+                onChange={handleContactChange}
+                maxLength={selectedCountry.max}
+                placeholder={countryCode === '+63' ? '9XXXXXXXXX' : 'Phone number'}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              />
+            </div>
+            {countryCode === '+63' && form.contact_number && !form.contact_number.startsWith('9') ? (
+              <p className="text-xs text-red-600 mt-1">Philippine mobile numbers start with 9 and has only 11 digits.</p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">
+                {form.contact_number && ` · will be saved as ${countryCode}${form.contact_number}`}
+              </p>
+            )}
+          </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
 

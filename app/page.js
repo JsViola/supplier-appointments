@@ -1,11 +1,13 @@
 import Link from 'next/link'
+import HospitalHeader from '@/components/HospitalHeader'
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-3xl font-semibold text-gray-900 mb-3">Delivery Appointments</h1>
-        <p className="text-gray-500 mb-8">Book a delivery appointment or manage existing ones.</p>
+    <div className="min-h-screen flex items-start sm:items-center justify-center bg-gray-50 px-3 sm:px-4 pt-4 pb-6 sm:py-10">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm p-6 sm:p-8 text-center">
+        <HospitalHeader />
+        <hr className="my-6 border-gray-200" />
+        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">Delivery Appointments Management System</h1>
         <div className="flex flex-col gap-3">
           <Link
             href="/book"
