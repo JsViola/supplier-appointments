@@ -53,13 +53,18 @@ const COUNTRY_CODES = [
 ]
 
 const emptyItem = {
-  item_name: '',
-  brand: '',
-  unit_of_measurement: '',
-  quantity: '',
+  item_number: '',
   number_of_boxes: '',
   box_size: '',
 }
+
+// Item numbers the client can pick from in a partial delivery
+const ITEM_NUMBERS = Array.from({ length: 50 }, (_, i) => String(i + 1))
+
+// Shared look for the compact one-line item fields
+const labelClass = 'block text-xs font-medium text-gray-700 mb-1'
+const inputClass =
+  'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent'
 
 export default function BookPage() {
   const [form, setForm] = useState({
@@ -72,6 +77,9 @@ export default function BookPage() {
     contact_number: '',
   })
   const [items, setItems] = useState([{ ...emptyItem }])
+  const [deliveryType, setDeliveryType] = useState('') // '' | 'full' | 'partial'
+  // Item numbers already used, so each number can only be picked once
+  const usedNumbers = items.map((it) => it.item_number).filter(Boolean)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState(null)
   const [countryCode, setCountryCode] = useState('+63')
@@ -146,6 +154,13 @@ export default function BookPage() {
     setItems(updated)
   }
 
+  // Switching between full and partial starts the items section fresh,
+  // so numbers typed for one type never carry over into the other.
+  function handleDeliveryTypeChange(e) {
+    setDeliveryType(e.target.value)
+    setItems([{ ...emptyItem }])
+  }
+
   function addItem() {
     setItems([...items, { ...emptyItem }])
   }
@@ -165,6 +180,7 @@ export default function BookPage() {
       contact_number: '',
     })
     setItems([{ ...emptyItem }])
+    setDeliveryType('')
     setCountryCode('+63')
     setError(null)
     setSubmitted(false)
@@ -179,6 +195,11 @@ export default function BookPage() {
       return
     }
 
+    if (!deliveryType) {
+      setError('Please choose Full Delivery or Partial Delivery.')
+      return
+    }
+
     if (!isContactValid()) {
       setError(
         countryCode === '+63'
@@ -188,10 +209,29 @@ export default function BookPage() {
       return
     }
 
+    // A full delivery is saved as one item labeled "Full delivery". A partial
+    // delivery saves one entry per line, sorted by item number, each with an
+    // "Item N" label so the current admin popup still shows a readable name.
+    const itemsToSave =
+      deliveryType === 'full'
+        ? [{
+            item_name: 'Full delivery',
+            number_of_boxes: items[0].number_of_boxes,
+            box_size: items[0].box_size,
+          }]
+        : [...items]
+            .sort((a, b) => Number(a.item_number) - Number(b.item_number))
+            .map((it) => ({
+              item_name: `Item ${it.item_number}`,
+              item_number: it.item_number,
+              number_of_boxes: it.number_of_boxes,
+              box_size: it.box_size,
+            }))
+
     // Saved as one string with the country code, for example +639267405329
     const { error } = await supabase
       .from('appointments')
-      .insert([{ ...form, contact_number: `${countryCode}${form.contact_number}`, items }])
+      .insert([{ ...form, contact_number: `${countryCode}${form.contact_number}`, items: itemsToSave }])
 
     if (error) {
       setError('Something went wrong. Please try again.')
@@ -222,7 +262,7 @@ export default function BookPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-3 sm:px-4 py-6 sm:py-12">
-      <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm p-5 sm:p-8">
+      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm p-5 sm:p-8">
         <HospitalHeader />
         <hr className="my-5 sm:my-6 border-gray-200" />
         <Link
@@ -295,7 +335,7 @@ export default function BookPage() {
               <option value="working">Working Days</option>
             </select>
             <p className="text-xs text-gray-400 mt-1">
-              Calendar Days counts every day, weekends and holidays included. Working Days counts Monday–Thursday only.
+              Calendar Days counts every day, weekends and holidays included. Working Days counts Monday–Friday only.
             </p>
           </div>
 
@@ -319,88 +359,120 @@ export default function BookPage() {
               <p className="text-xs text-gray-400 mt-1">
                 Pickable range: {deliveryWindow.start} to {deliveryWindow.end}
                 {form.count_type === 'working'
-                  ? ' (Monday–Thursday only, holidays excluded)'
+                  ? ' (Monday–Friday only, holidays excluded)'
                   : ' (any day, weekends and holidays included)'}
               </p>
             )}
           </div>
 
           <div className="pt-2">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-700">Items</h2>
-              <button
-                type="button"
-                onClick={addItem}
-                className="text-sm text-blue-600 font-medium hover:text-blue-700"
-              >
-                + Add item
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery type</label>
+            <select
+              value={deliveryType}
+              onChange={handleDeliveryTypeChange}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            >
+              <option value="">Select delivery type</option>
+              <option value="full">Full Delivery</option>
+              <option value="partial">Partial Delivery</option>
+            </select>
 
-            <div className="space-y-4">
-              {items.map((item, index) => (
-                <div key={index} className="border border-gray-200 rounded-xl p-4 relative">
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-sm"
-                    >
-                      Remove
-                    </button>
-                  )}
-                  <p className="text-xs font-medium text-gray-400 mb-3">Item {index + 1}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <Field
-                        label="Item name"
-                        name="item_name"
-                        value={item.item_name}
-                        onChange={(e) => handleItemChange(index, e)}
-                        required
-                      />
-                    </div>
-                    <Field
-                      label="Brand (optional)"
-                      name="brand"
-                      value={item.brand}
-                      onChange={(e) => handleItemChange(index, e)}
-                    />
-                    <Field
-                      label="Unit of measurement"
-                      name="unit_of_measurement"
-                      value={item.unit_of_measurement}
-                      onChange={(e) => handleItemChange(index, e)}
-                      placeholder="e.g. pcs, kg"
-                    />
-                    <Field
-                      label="Quantity"
-                      name="quantity"
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, e)}
-                      required
-                    />
-                    <Field
-                      label="Number of boxes"
-                      name="number_of_boxes"
-                      type="number"
-                      value={item.number_of_boxes}
-                      onChange={(e) => handleItemChange(index, e)}
-                    />
-                    <div className="col-span-2">
-                      <Field
-                        label="Size of boxes"
-                        name="box_size"
-                        value={item.box_size}
-                        onChange={(e) => handleItemChange(index, e)}
-                        placeholder="e.g. small,medium,large,XL"
-                      />
-                    </div>
-                  </div>
+            {deliveryType === 'full' && (
+              <div className="border border-gray-200 rounded-xl p-4 mt-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field
+                    label="Number of boxes"
+                    name="number_of_boxes"
+                    type="number"
+                    value={items[0].number_of_boxes}
+                    onChange={(e) => handleItemChange(0, e)}
+                    required
+                  />
+                  <Field
+                    label="Size of boxes"
+                    name="box_size"
+                    value={items[0].box_size}
+                    onChange={(e) => handleItemChange(0, e)}
+                    placeholder="e.g. small,medium,large,XL"
+                  />
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {deliveryType === 'partial' && (
+              <div className="mt-4">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Items</h2>
+
+                <div className="space-y-4">
+                  {items.map((item, index) => (
+                    <div key={index} className="relative border border-gray-200 rounded-xl p-3 sm:p-4">
+                      {index > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="absolute -top-2.5 right-3 bg-white px-2 text-xs text-gray-400 hover:text-red-500"
+                        >
+                          Remove
+                        </button>
+                      )}
+
+                      {/* Phones: item number and boxes on row one, box size below. Larger screens: one line of three. */}
+                      <div className="grid grid-cols-2 sm:grid-cols-[5.5rem_6rem_1fr] gap-3">
+                        <div>
+                          <label className={labelClass}>Item number</label>
+                          <select
+                            name="item_number"
+                            required
+                            value={item.item_number}
+                            onChange={(e) => handleItemChange(index, e)}
+                            className={inputClass}
+                          >
+                            <option value="">Select</option>
+                            {ITEM_NUMBERS.filter(
+                              (n) => n === item.item_number || !usedNumbers.includes(n)
+                            ).map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelClass}>Number of boxes</label>
+                          <input
+                            name="number_of_boxes"
+                            type="number"
+                            min="1"
+                            required
+                            value={item.number_of_boxes}
+                            onChange={(e) => handleItemChange(index, e)}
+                            className={inputClass}
+                          />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className={labelClass}>Size of boxes</label>
+                          <input
+                            name="box_size"
+                            value={item.box_size}
+                            onChange={(e) => handleItemChange(index, e)}
+                            placeholder="e.g. small,medium,large,XL"
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addItem}
+                  disabled={items.length >= ITEM_NUMBERS.length}
+                  className="mt-4 text-sm text-blue-600 font-medium hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  + Add item
+                </button>
+              </div>
+            )}
           </div>
 
           <div>

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: 'Delivery Appointments System | LPGH Materials Management Section',
+  title: 'Delivery Appointments System` | LPGH Materials Management Section',
   description: 'Delivery appointment booking for Las Piñas General Hospital and Satellite Trauma Center.',
 }
 

@@ -48,6 +48,29 @@ function CustomDateHeader({ date, label, isOffRange }) {
   )
 }
 
+const STATUS_COLORS = {
+  pending: '#f59e0b',
+  delivered: '#16a34a',
+  confirmed: '#16a34a',
+  cancelled: '#dc2626',
+}
+
+// "Oct 25, 2026 · 3:42 PM", shown in the viewer's local time
+function formatSubmitted(ts) {
+  return ts ? format(new Date(ts), 'MMM d, yyyy · h:mm a') : 'n/a'
+}
+
+// A full delivery is saved as one item named "Full delivery"; partial
+// items carry an item_number. Older appointments have neither, so they
+// get no label.
+function getDeliveryType(appt) {
+  const first = (appt.items || [])[0]
+  if (!first) return null
+  if (first.item_name === 'Full delivery') return 'Full delivery'
+  if (first.item_number) return 'Partial delivery'
+  return null
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -55,6 +78,8 @@ export default function AdminPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedAppt, setSelectedAppt] = useState(null)
   const [moreEvents, setMoreEvents] = useState(null) // { date, events }
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [newestFirst, setNewestFirst] = useState(true)
 
   useEffect(() => {
     async function checkAuth() {
@@ -149,19 +174,41 @@ export default function AdminPage() {
     )
   }
 
+  // Every appointment ordered by when it was submitted. map() makes a copy,
+  // so sorting never changes the calendar's own data.
+  const sortedAppts = events
+    .map((e) => e.resource)
+    .sort((a, b) =>
+      newestFirst
+        ? new Date(b.created_at) - new Date(a.created_at)
+        : new Date(a.created_at) - new Date(b.created_at)
+    )
+
   return (
-    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
+    <div
+      className={`min-h-screen bg-gray-50 p-3 sm:p-6 transition-[padding] duration-200 ${
+        panelOpen ? 'lg:pr-[26rem]' : ''
+      }`}
+    >
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Delivery appointments</h1>
-        <button
-          onClick={async () => {
-            await supabase.auth.signOut()
-            router.push('/admin/login')
-          }}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Log out
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setPanelOpen((open) => !open)}
+            className="text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 bg-white hover:bg-gray-50"
+          >
+            {panelOpen ? 'Hide list' : 'Appointment list'}
+          </button>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              router.push('/admin/login')
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Log out
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -183,8 +230,8 @@ export default function AdminPage() {
             dayPropGetter={(date) => {
               const dateStr = format(date, 'yyyy-MM-dd')
               const holiday = getHoliday(dateStr)
-              const day = date.getDay() // 0 = Sun, 5 = Fri, 6 = Sat
-              const isWeekend = day === 0 || day === 5 || day === 6
+              const day = date.getDay() // 0 = Sun, 6 = Sat
+              const isWeekend = day === 0 || day === 6
 
               if (holiday) {
                 return { style: { backgroundColor: '#fee2e2' } } // light red
@@ -195,15 +242,9 @@ export default function AdminPage() {
               return {}
             }}
             eventPropGetter={(event) => {
-              const colors = {
-                pending: '#f59e0b',
-                delivered: '#16a34a',
-                confirmed: '#16a34a',
-                cancelled: '#dc2626',
-              }
               return {
                 style: {
-                  backgroundColor: colors[event.resource.status] || '#2563eb',
+                  backgroundColor: STATUS_COLORS[event.resource.status] || '#2563eb',
                 },
               }
             }}
@@ -234,6 +275,7 @@ export default function AdminPage() {
 
             <div className="space-y-3 text-sm text-gray-700">
               <p><span className="font-medium text-gray-900">Supplier:</span> {selectedAppt.supplier}</p>
+              <p><span className="font-medium text-gray-900">Confirmation P.O. date:</span> {selectedAppt.confirmation_po_date || 'n/a'}</p>
               <p>
                 <span className="font-medium text-gray-900">Delivery terms:</span>{' '}
                 {selectedAppt.delivery_terms ? `${selectedAppt.delivery_terms} days` : 'n/a'}
@@ -241,7 +283,11 @@ export default function AdminPage() {
                   ` · ${selectedAppt.count_type === 'working' ? 'Working Days' : 'Calendar Days'}`}
               </p>
               <p><span className="font-medium text-gray-900">Delivery date:</span> {selectedAppt.tentative_delivery_date}</p>
+              {getDeliveryType(selectedAppt) && (
+                <p><span className="font-medium text-gray-900">Delivery type:</span> {getDeliveryType(selectedAppt)}</p>
+              )}
               <p><span className="font-medium text-gray-900">Contact:</span> {selectedAppt.contact_number}</p>
+              <p><span className="font-medium text-gray-900">Submitted:</span> {formatSubmitted(selectedAppt.created_at)}</p>
 
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-900">Status:</span>
@@ -264,8 +310,9 @@ export default function AdminPage() {
                         {it.item_name}{it.brand ? ` (${it.brand})` : ''}
                       </p>
                       <p className="text-gray-500 text-xs mt-1">
-                        Qty: {it.quantity || '-'} {it.unit_of_measurement || ''} ·
-                        {' '}Boxes: {it.number_of_boxes || '-'} @ {it.box_size || 'n/a'}
+                        {it.quantity ? `Qty: ${it.quantity} ${it.unit_of_measurement || ''} · ` : ''}
+                        Boxes: {it.number_of_boxes || '-'}
+                        {it.box_size ? ` · Size: ${it.box_size}` : ''}
                       </p>
                     </div>
                   ))}
@@ -321,6 +368,70 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Side panel: every appointment, by when it was submitted */}
+      {panelOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setPanelOpen(false)}
+        />
+      )}
+      <aside
+        aria-hidden={!panelOpen}
+        className={`fixed top-0 right-0 h-full w-full max-w-sm bg-white border-l border-gray-200 shadow-xl z-40 flex flex-col transition-transform duration-200 ${
+          panelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">All appointments</h2>
+            <p className="text-xs text-gray-500">{sortedAppts.length} total</p>
+          </div>
+          <button
+            onClick={() => setPanelOpen(false)}
+            aria-label="Close list"
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="px-4 py-2 border-b border-gray-100">
+          <button
+            onClick={() => setNewestFirst((v) => !v)}
+            className="text-sm text-blue-600 font-medium hover:text-blue-700"
+          >
+            {newestFirst ? 'Newest first ↓' : 'Oldest first ↑'}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+          {sortedAppts.length === 0 && (
+            <p className="p-4 text-sm text-gray-500">No appointments yet.</p>
+          )}
+          {sortedAppts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => setSelectedAppt(a)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50"
+            >
+              <p className="text-sm font-medium text-gray-900">
+                {a.supplier} · PO {a.po_number}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Submitted {formatSubmitted(a.created_at)}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                <span
+                  className="inline-block w-2 h-2 rounded-full mr-1"
+                  style={{ backgroundColor: STATUS_COLORS[a.status] || '#2563eb' }}
+                />
+                {a.status} · Delivery {a.tentative_delivery_date}
+              </p>
+            </button>
+          ))}
+        </div>
+      </aside>
     </div>
   )
 }
