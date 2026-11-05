@@ -1,13 +1,15 @@
 'use client'
-
-import { useState, useEffect } from 'react'
+ 
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { supabase } from '@/lib/supabaseClient'
+import './datepicker.css'
+import { toast } from 'sonner'
 import HospitalHeader from '@/components/HospitalHeader'
+import { Turnstile } from '@marsidev/react-turnstile'
 import { getDeliveryWindow, isSelectableDeliveryDate } from '@/lib/holidays'
-
+ 
 // react-datepicker works with real Date objects, but we store dates as
 // plain 'YYYY-MM-DD' strings everywhere else (form state, Supabase).
 // These two convert between the two without the timezone shift that
@@ -15,7 +17,7 @@ import { getDeliveryWindow, isSelectableDeliveryDate } from '@/lib/holidays'
 function parseDate(str) {
   return str ? new Date(`${str}T00:00:00`) : null
 }
-
+ 
 function formatDate(date) {
   if (!date) return ''
   const y = date.getFullYear()
@@ -23,7 +25,7 @@ function formatDate(date) {
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
-
+ 
 // Country calling codes offered in the contact number field. `min` and
 // `max` are the allowed digit counts AFTER the country code. +63 is
 // strict (Philippine mobile numbers are exactly 10 digits and start
@@ -51,21 +53,16 @@ const COUNTRY_CODES = [
   { code: '+49', label: 'DE +49', min: 10, max: 12 },
   { code: '+33', label: 'FR +33', min: 9, max: 9 },
 ]
-
+ 
 const emptyItem = {
   item_number: '',
   number_of_boxes: '',
   box_size: '',
 }
-
+ 
 // Item numbers the client can pick from in a partial delivery
 const ITEM_NUMBERS = Array.from({ length: 50 }, (_, i) => String(i + 1))
-
-// Shared look for the compact one-line item fields
-const labelClass = 'block text-xs font-medium text-gray-700 mb-1'
-const inputClass =
-  'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent'
-
+ 
 export default function BookPage() {
   const [form, setForm] = useState({
     po_number: '',
@@ -83,8 +80,17 @@ export default function BookPage() {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState(null)
   const [countryCode, setCountryCode] = useState('+63')
+  const [turnstileToken, setTurnstileToken] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const turnstileRef = useRef(null)
+ 
+  // Phones and tablets get the calendar as a centered sheet, and no keyboard
+  const [coarse, setCoarse] = useState(false)
+  useEffect(() => {
+    setCoarse(window.matchMedia('(pointer: coarse)').matches)
+  }, [])
   const selectedCountry = COUNTRY_CODES.find((c) => c.code === countryCode)
-
+ 
   // Recalculates automatically whenever confirmation date, terms, or
   // count type change — null until all three are filled in.
   const deliveryWindow = getDeliveryWindow(
@@ -92,7 +98,7 @@ export default function BookPage() {
     Number(form.delivery_terms),
     form.count_type
   )
-
+ 
   // If the client already picked a delivery date and then goes back and
   // changes the confirmation date, terms, or count type, the previously
   // picked date can fall outside the new window. Clear it automatically
@@ -106,11 +112,11 @@ export default function BookPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.confirmation_po_date, form.delivery_terms, form.count_type])
-
+ 
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
-
+ 
   // Keeps the P.O. Number locked to YYYY-MM-XXXX as the client types:
   // strips anything that isn't a digit, caps it at 10 digits total,
   // and inserts the two dashes automatically.
@@ -121,7 +127,7 @@ export default function BookPage() {
     if (digits.length > 6) formatted = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6)
     setForm({ ...form, po_number: formatted })
   }
-
+ 
   // Keeps the contact number digits-only and within the allowed length.
   // For +63 it also strips a pasted "63" or a leading 0, so typing or
   // pasting 09267405329 or +639267405329 both become 9267405329.
@@ -133,42 +139,42 @@ export default function BookPage() {
     }
     setForm({ ...form, contact_number: digits.slice(0, selectedCountry.max) })
   }
-
+ 
   function handleCountryChange(e) {
     const newCode = e.target.value
     const country = COUNTRY_CODES.find((c) => c.code === newCode)
     setCountryCode(newCode)
     setForm({ ...form, contact_number: form.contact_number.slice(0, country.max) })
   }
-
+ 
   function isContactValid() {
     const n = form.contact_number
     if (n.length < selectedCountry.min || n.length > selectedCountry.max) return false
     if (countryCode === '+63' && !n.startsWith('9')) return false
     return true
   }
-
+ 
   function handleItemChange(index, e) {
     const updated = [...items]
     updated[index] = { ...updated[index], [e.target.name]: e.target.value }
     setItems(updated)
   }
-
+ 
   // Switching between full and partial starts the items section fresh,
   // so numbers typed for one type never carry over into the other.
   function handleDeliveryTypeChange(e) {
     setDeliveryType(e.target.value)
     setItems([{ ...emptyItem }])
   }
-
+ 
   function addItem() {
     setItems([...items, { ...emptyItem }])
   }
-
+ 
   function removeItem(index) {
     setItems(items.filter((_, i) => i !== index))
   }
-
+ 
   function resetForm() {
     setForm({
       po_number: '',
@@ -184,22 +190,34 @@ export default function BookPage() {
     setCountryCode('+63')
     setError(null)
     setSubmitted(false)
+    // Ask the bot check for a fresh token, since the old one may be used up
+    setTurnstileToken(null)
+    turnstileRef.current?.reset()
   }
-
+ 
+  // "Are you sure" for Clear, as a toast with two buttons
+  function askClear() {
+    toast('Clear everything you entered?', {
+      duration: 8000,
+      action: { label: 'Clear', onClick: () => resetForm() },
+      cancel: { label: 'Keep', onClick: () => {} },
+    })
+  }
+ 
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
-
+ 
     if (!deliveryWindow || !isSelectableDeliveryDate(form.tentative_delivery_date, deliveryWindow, form.count_type)) {
       setError('Please choose a valid delivery date, within range and matching your selected count type.')
       return
     }
-
+ 
     if (!deliveryType) {
       setError('Please choose Full Delivery or Partial Delivery.')
       return
     }
-
+ 
     if (!isContactValid()) {
       setError(
         countryCode === '+63'
@@ -208,7 +226,7 @@ export default function BookPage() {
       )
       return
     }
-
+ 
     // A full delivery is saved as one item labeled "Full delivery". A partial
     // delivery saves one entry per line, sorted by item number, each with an
     // "Item N" label so the current admin popup still shows a readable name.
@@ -227,327 +245,433 @@ export default function BookPage() {
               number_of_boxes: it.number_of_boxes,
               box_size: it.box_size,
             }))
-
-    // Saved as one string with the country code, for example +639267405329
-    const { error } = await supabase
-      .from('appointments')
-      .insert([{ ...form, contact_number: `${countryCode}${form.contact_number}`, items: itemsToSave }])
-
-    if (error) {
-      setError('Something went wrong. Please try again.')
-      console.error(error)
-    } else {
-      setSubmitted(true)
+ 
+    if (!turnstileToken) {
+      setError('Please wait for the verification check to finish, then try again.')
+      return
+    }
+ 
+    // The form no longer talks to Supabase directly. It sends everything to
+    // /api/book, which re-checks every rule on the server, verifies the bot
+    // check, saves the appointment, and emails the admin. The contact number
+    // is sent as one string with the country code, for example +639267405329.
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          contact_number: `${countryCode}${form.contact_number}`,
+          items: itemsToSave,
+          turnstileToken,
+        }),
+      })
+      const result = await res.json().catch(() => ({}))
+ 
+      if (!res.ok) {
+        setError(result.error || 'Something went wrong. Please try again.')
+        // A used or failed token cannot be reused, so get a new one
+        setTurnstileToken(null)
+        turnstileRef.current?.reset()
+      } else {
+        setSubmitted(true)
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Could not reach the server. Please check your connection and try again.')
+      setTurnstileToken(null)
+      turnstileRef.current?.reset()
+    } finally {
+      setSubmitting(false)
     }
   }
-
+ 
+  const prettyDate = (s) =>
+    parseDate(s)?.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+ 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-3 sm:px-4 py-6">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm p-6 sm:p-8 text-center">
-          <HospitalHeader />
-          <hr className="my-5 sm:my-6 border-gray-200" />
-          <h1 className="text-2xl font-semibold text-gray-900 mb-2">Request received</h1>
-          <p className="text-gray-500 mb-6">We'll confirm your delivery appointment shortly.</p>
-          <button
-            onClick={resetForm}
-            className="text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            Submit another appointment
-          </button>
-        </div>
-      </div>
+      <>
+        <HospitalHeader>
+          <Link href="/" className="navlink">Home</Link>
+        </HospitalHeader>
+        <main className="shell success">
+          <h1 className="title rise" style={{ '--i': 0 }}>Request received</h1>
+          <p className="lead text-soft rise" style={{ '--i': 1 }}>
+            Your delivery appointment was saved. The Materials Management Section can now see it on the delivery calendar.
+          </p>
+          <div className="success-actions rise" style={{ '--i': 2 }}>
+            <button type="button" className="btn btn-primary" onClick={resetForm}>Book another delivery</button>
+            <Link href="/" className="btn btn-quiet">Back to home</Link>
+          </div>
+        </main>
+      </>
     )
   }
-
+ 
   return (
-    <div className="min-h-screen bg-gray-50 px-3 sm:px-4 py-6 sm:py-12">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm p-5 sm:p-8">
-        <HospitalHeader />
-        <hr className="my-5 sm:my-6 border-gray-200" />
-        <Link
-          href="/"
-          className="inline-block text-sm text-gray-500 hover:text-gray-700 mb-4"
-        >
-          ← Back to home
-        </Link>
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Book a delivery appointment</h1>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">P.O. Number</label>
-            <input
-              name="po_number"
-              type="text"
-              inputMode="numeric"
-              value={form.po_number}
-              onChange={handlePoChange}
-              required
-              maxLength={12}
-              placeholder="2026-10-0613"
-              pattern="\d{4}-\d{2}-\d{4}"
-              title="Format: YYYY-MM-XXXX, e.g. 2026-10-0613"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">Format: YYYY-MM-XXXX (e.g. 2026-10-0613)</p>
-          </div>
-          <Field label="Supplier" name="supplier" value={form.supplier} onChange={handleChange} required />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation P.O. Date</label>
-            <input
-              name="confirmation_po_date"
-              type="date"
-              required
-              value={form.confirmation_po_date}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">The date the P.O. was confirmed.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Terms (days)</label>
-            <input
-              name="delivery_terms"
-              type="number"
-              min="1"
-              max="365"
-              required
-              value={form.delivery_terms}
-              onChange={handleChange}
-              placeholder="e.g. 30"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">Enter the number of days stated in your P.O. contract.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Count Type</label>
-            <select
-              name="count_type"
-              required
-              value={form.count_type}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            >
-              <option value="">Select type</option>
-              <option value="calendar">Calendar Days</option>
-              <option value="working">Working Days</option>
-            </select>
-            <p className="text-xs text-gray-400 mt-1">
-              Calendar Days counts every day, weekends and holidays included. Working Days counts Monday–Friday only.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tentative delivery date</label>
-            <DatePicker
-              selected={parseDate(form.tentative_delivery_date)}
-              onChange={(date) => setForm({ ...form, tentative_delivery_date: formatDate(date) })}
-              minDate={deliveryWindow ? parseDate(deliveryWindow.start) : null}
-              maxDate={deliveryWindow ? parseDate(deliveryWindow.end) : null}
-              filterDate={(date) =>
-                deliveryWindow ? isSelectableDeliveryDate(formatDate(date), deliveryWindow, form.count_type) : false
+    <>
+      <HospitalHeader>
+        <Link href="/" className="navlink">Home</Link>
+      </HospitalHeader>
+ 
+      <main className="shell form-page">
+        <div className="form-intro">
+          <h1 className="title rise" style={{ '--i': 0 }}>Book a delivery appointment</h1>
+          <p className="lead text-soft rise" style={{ '--i': 1 }}>
+            Copy the details from your purchase order. Every field is required unless it says optional.
+          </p>
+        </div>
+ 
+        <form onSubmit={handleSubmit} className="stack">
+          {/* Purchase order */}
+          <section className="panel rise" style={{ '--i': 2 }} aria-labelledby="sec-po">
+            <h2 id="sec-po" className="h2">Purchase order</h2>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="P.O. number" htmlFor="po_number" hint="Year, month, then four digits. Dashes are added for you.">
+                <input
+                  id="po_number"
+                  name="po_number"
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  required
+                  maxLength={12}
+                  placeholder="2026-10-0613"
+                  pattern="\d{4}-\d{2}-\d{4}"
+                  title="Format: YYYY-MM-XXXX, for example 2026-10-0613"
+                  value={form.po_number}
+                  onChange={handlePoChange}
+                  aria-describedby="po_number-hint"
+                />
+              </Field>
+              <Field label="Supplier" htmlFor="supplier">
+                <input
+                  id="supplier"
+                  name="supplier"
+                  className="input"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  maxLength={150}
+                  value={form.supplier}
+                  onChange={handleChange}
+                />
+              </Field>
+            </div>
+          </section>
+ 
+          {/* Delivery terms and the live window */}
+          <section className="panel rise" style={{ '--i': 3 }} aria-labelledby="sec-terms">
+            <h2 id="sec-terms" className="h2">Delivery terms</h2>
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Confirmation P.O. date" htmlFor="confirmation_po_date" hint="Counting starts the day after.">
+                <input
+                  id="confirmation_po_date"
+                  name="confirmation_po_date"
+                  className="input"
+                  type="date"
+                  required
+                  value={form.confirmation_po_date}
+                  onChange={handleChange}
+                  aria-describedby="confirmation_po_date-hint"
+                />
+              </Field>
+              <Field label="Delivery terms (days)" htmlFor="delivery_terms" hint="The days stated on the P.O.">
+                <input
+                  id="delivery_terms"
+                  name="delivery_terms"
+                  className="input"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="365"
+                  required
+                  placeholder="30"
+                  value={form.delivery_terms}
+                  onChange={handleChange}
+                  aria-describedby="delivery_terms-hint"
+                />
+              </Field>
+              <Field label="Count type" htmlFor="count_type">
+                <select
+                  id="count_type"
+                  name="count_type"
+                  className="input"
+                  required
+                  value={form.count_type}
+                  onChange={handleChange}
+                >
+                  <option value="">Select</option>
+                  <option value="calendar">Calendar days</option>
+                  <option value="working">Working days</option>
+                </select>
+              </Field>
+            </div>
+ 
+            <div className="notice" aria-live="polite">
+              {deliveryWindow ? (
+                <>
+                  <p className="notice-title">
+                    You can deliver from {prettyDate(deliveryWindow.start)} to {prettyDate(deliveryWindow.end)}.
+                  </p>
+                  <p className="small text-soft mt-1">
+                    {form.count_type === 'working'
+                      ? 'Working days: Monday to Friday count. Weekends and Philippine regular holidays are skipped, and you can only pick a working day.'
+                      : 'Calendar days: every day counts, including weekends and holidays, and you can pick any day in the window.'}
+                  </p>
+                </>
+              ) : (
+                <p className="small">
+                  Enter the confirmation date, the delivery terms, and the count type to see your delivery window.
+                </p>
+              )}
+            </div>
+          </section>
+ 
+          {/* Delivery date */}
+          <section className="panel rise" style={{ '--i': 4 }} aria-labelledby="sec-date">
+            <h2 id="sec-date" className="h2">Delivery date</h2>
+            <Field
+              label="Tentative delivery date"
+              htmlFor="tentative_delivery_date"
+              hint={
+                deliveryWindow
+                  ? 'Days you cannot pick are greyed out.'
+                  : 'Available once the delivery terms above are filled in.'
               }
-              disabled={!deliveryWindow}
-              required
-              placeholderText={deliveryWindow ? 'Select a date' : 'Fill in the fields above first'}
-              dateFormat="yyyy-MM-dd"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
-            />
-            {deliveryWindow && (
-              <p className="text-xs text-gray-400 mt-1">
-                Pickable range: {deliveryWindow.start} to {deliveryWindow.end}
-                {form.count_type === 'working'
-                  ? ' (Monday–Friday only, holidays excluded)'
-                  : ' (any day, weekends and holidays included)'}
-              </p>
-            )}
-          </div>
-
-          <div className="pt-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery type</label>
-            <select
-              value={deliveryType}
-              onChange={handleDeliveryTypeChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
             >
-              <option value="">Select delivery type</option>
-              <option value="full">Full Delivery</option>
-              <option value="partial">Partial Delivery</option>
-            </select>
-
+              <DatePicker
+                id="tentative_delivery_date"
+                selected={parseDate(form.tentative_delivery_date)}
+                onChange={(date) => setForm({ ...form, tentative_delivery_date: formatDate(date) })}
+                minDate={deliveryWindow ? parseDate(deliveryWindow.start) : null}
+                maxDate={deliveryWindow ? parseDate(deliveryWindow.end) : null}
+                filterDate={(date) =>
+                  deliveryWindow ? isSelectableDeliveryDate(formatDate(date), deliveryWindow, form.count_type) : false
+                }
+                openToDate={deliveryWindow ? parseDate(deliveryWindow.start) : undefined}
+                disabled={!deliveryWindow}
+                required
+                withPortal={coarse}
+                readOnly={coarse}
+                autoComplete="off"
+                placeholderText={deliveryWindow ? 'Choose a date' : 'Fill in the terms first'}
+                dateFormat="MMM d, yyyy"
+                className="input"
+                wrapperClassName="dp-wrap"
+              />
+            </Field>
+          </section>
+ 
+          {/* Items */}
+          <section className="panel rise" style={{ '--i': 5 }} aria-labelledby="sec-items">
+            <h2 id="sec-items" className="h2">What you are delivering</h2>
+            <Field label="Delivery type" htmlFor="delivery_type">
+              <select
+                id="delivery_type"
+                className="input"
+                required
+                value={deliveryType}
+                onChange={handleDeliveryTypeChange}
+              >
+                <option value="">Select delivery type</option>
+                <option value="full">Full delivery</option>
+                <option value="partial">Partial delivery</option>
+              </select>
+            </Field>
+ 
             {deliveryType === 'full' && (
-              <div className="border border-gray-200 rounded-xl p-4 mt-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    label="Number of boxes"
-                    name="number_of_boxes"
-                    type="number"
-                    value={items[0].number_of_boxes}
-                    onChange={(e) => handleItemChange(0, e)}
-                    required
-                  />
-                  <Field
-                    label="Size of boxes"
-                    name="box_size"
-                    value={items[0].box_size}
-                    onChange={(e) => handleItemChange(0, e)}
-                    placeholder="e.g. small,medium,large,XL"
-                  />
+              <div className="line">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Number of boxes" htmlFor="full_boxes">
+                    <input
+                      id="full_boxes"
+                      name="number_of_boxes"
+                      className="input"
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      required
+                      value={items[0].number_of_boxes}
+                      onChange={(e) => handleItemChange(0, e)}
+                    />
+                  </Field>
+                  <Field label="Size of boxes" htmlFor="full_size" optional>
+                    <input
+                      id="full_size"
+                      name="box_size"
+                      className="input"
+                      type="text"
+                      maxLength={50}
+                      placeholder="small, medium, large, XL"
+                      value={items[0].box_size}
+                      onChange={(e) => handleItemChange(0, e)}
+                    />
+                  </Field>
                 </div>
               </div>
             )}
-
+ 
             {deliveryType === 'partial' && (
-              <div className="mt-4">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Items</h2>
-
-                <div className="space-y-4">
+              <div>
+                <ul className="grid gap-3">
                   {items.map((item, index) => (
-                    <div key={index} className="relative border border-gray-200 rounded-xl p-3 sm:p-4">
-                      {index > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="absolute -top-2.5 right-3 bg-white px-2 text-xs text-gray-400 hover:text-red-500"
-                        >
-                          Remove
-                        </button>
-                      )}
-
-                      {/* Phones: item number and boxes on row one, box size below. Larger screens: one line of three. */}
-                      <div className="grid grid-cols-2 sm:grid-cols-[5.5rem_6rem_1fr] gap-3">
-                        <div>
-                          <label className={labelClass}>Item number</label>
+                    <li key={index} className="line">
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-[7rem_8rem_minmax(0,1fr)_auto]">
+                        <Field label="Item number" htmlFor={`item_number_${index}`}>
                           <select
+                            id={`item_number_${index}`}
                             name="item_number"
+                            className="input"
                             required
                             value={item.item_number}
                             onChange={(e) => handleItemChange(index, e)}
-                            className={inputClass}
                           >
                             <option value="">Select</option>
-                            {ITEM_NUMBERS.filter(
-                              (n) => n === item.item_number || !usedNumbers.includes(n)
-                            ).map((n) => (
+                            {ITEM_NUMBERS.filter((n) => n === item.item_number || !usedNumbers.includes(n)).map((n) => (
                               <option key={n} value={n}>{n}</option>
                             ))}
                           </select>
-                        </div>
-                        <div>
-                          <label className={labelClass}>Number of boxes</label>
+                        </Field>
+                        <Field label="Number of boxes" htmlFor={`boxes_${index}`}>
                           <input
+                            id={`boxes_${index}`}
                             name="number_of_boxes"
+                            className="input"
                             type="number"
+                            inputMode="numeric"
                             min="1"
                             required
                             value={item.number_of_boxes}
                             onChange={(e) => handleItemChange(index, e)}
-                            className={inputClass}
                           />
-                        </div>
+                        </Field>
                         <div className="col-span-2 sm:col-span-1">
-                          <label className={labelClass}>Size of boxes</label>
-                          <input
-                            name="box_size"
-                            value={item.box_size}
-                            onChange={(e) => handleItemChange(index, e)}
-                            placeholder="e.g. small,medium,large,XL"
-                            className={inputClass}
-                          />
+                          <Field label="Size of boxes" htmlFor={`size_${index}`} optional>
+                            <input
+                              id={`size_${index}`}
+                              name="box_size"
+                              className="input"
+                              type="text"
+                              maxLength={50}
+                              placeholder="small, medium, large, XL"
+                              value={item.box_size}
+                              onChange={(e) => handleItemChange(index, e)}
+                            />
+                          </Field>
                         </div>
+                        {index > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-quiet btn-sm col-span-2 sm:col-span-1 sm:self-end"
+                            onClick={() => removeItem(index)}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
-
+                </ul>
+ 
                 <button
                   type="button"
+                  className="btn btn-quiet mt-4"
                   onClick={addItem}
                   disabled={items.length >= ITEM_NUMBERS.length}
-                  className="mt-4 text-sm text-blue-600 font-medium hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
-                  + Add item
+                  Add another item
                 </button>
               </div>
             )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contact number</label>
-            <div className="flex gap-2">
-              <select
-                value={countryCode}
-                onChange={handleCountryChange}
-                className="w-28 flex-shrink-0 border border-gray-300 rounded-lg px-2 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-              >
-                {COUNTRY_CODES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.label}</option>
-                ))}
-              </select>
-              <input
-                name="contact_number"
-                type="tel"
-                inputMode="numeric"
-                required
-                value={form.contact_number}
-                onChange={handleContactChange}
-                maxLength={selectedCountry.max}
-                placeholder={countryCode === '+63' ? '9XXXXXXXXX' : 'Phone number'}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          </section>
+ 
+          {/* Contact */}
+          <section className="panel rise" style={{ '--i': 6 }} aria-labelledby="sec-contact">
+            <h2 id="sec-contact" className="h2">Contact</h2>
+            <Field label="Mobile number" htmlFor="contact_number">
+              <div className="flex gap-2">
+                <select
+                  aria-label="Country code"
+                  className="input"
+                  style={{ width: '8rem', flexShrink: 0 }}
+                  value={countryCode}
+                  onChange={handleCountryChange}
+                >
+                  {COUNTRY_CODES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
+                <input
+                  id="contact_number"
+                  name="contact_number"
+                  className="input"
+                  style={{ flex: '1 1 0%', minWidth: 0 }}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  required
+                  maxLength={selectedCountry.max}
+                  placeholder={countryCode === '+63' ? '9XXXXXXXXX' : 'Phone number'}
+                  value={form.contact_number}
+                  onChange={handleContactChange}
+                  aria-describedby="contact_number-hint"
+                />
+              </div>
+              {countryCode === '+63' && form.contact_number && !form.contact_number.startsWith('9') ? (
+                <p id="contact_number-hint" className="hint" style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                  Philippine mobile numbers start with 9, for example 9267405329.
+                </p>
+              ) : (
+                <p id="contact_number-hint" className="hint">
+                  Digits only, no leading 0. {form.contact_number.length} of {selectedCountry.max} digits
+                  {form.contact_number && ` · saved as ${countryCode}${form.contact_number}`}
+                </p>
+              )}
+            </Field>
+          </section>
+ 
+          {/* Submit */}
+          <div className="grid gap-4 rise" style={{ '--i': 7 }}>
+            <div className="flex justify-center">
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                onSuccess={setTurnstileToken}
+                onExpire={() => setTurnstileToken(null)}
+                onError={() => setTurnstileToken(null)}
               />
             </div>
-            {countryCode === '+63' && form.contact_number && !form.contact_number.startsWith('9') ? (
-              <p className="text-xs text-red-600 mt-1">Philippine mobile numbers start with 9 and has only 11 digits.</p>
-            ) : (
-              <p className="text-xs text-gray-400 mt-1">
-                {form.contact_number && ` · will be saved as ${countryCode}${form.contact_number}`}
-              </p>
-            )}
-          </div>
-
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Clear everything you\'ve entered and start over?')) {
-                  resetForm()
-                }
-              }}
-              className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2.5 font-medium hover:bg-gray-50 transition"
-            >
-              Clear
-            </button>
-            <button
-              type="submit"
-              className="flex-1 bg-gray-900 text-white rounded-lg py-2.5 font-medium hover:bg-gray-800 transition"
-            >
-              Submit request
-            </button>
+ 
+            {error && <p className="error" role="alert">{error}</p>}
+ 
+            <div className="actions">
+              <button type="submit" className="btn btn-primary" disabled={submitting || !turnstileToken}>
+                {submitting ? 'Submitting...' : 'Submit request'}
+              </button>
+              <button type="button" className="btn btn-quiet" onClick={askClear}>Clear form</button>
+            </div>
           </div>
         </form>
-      </div>
-    </div>
+      </main>
+    </>
   )
 }
-
-function Field({ label, name, value, onChange, type = 'text', required = false, placeholder }) {
+ 
+// Label, the field itself, and an optional hint underneath
+function Field({ label, htmlFor, hint, optional, children }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        name={name}
-        type={type}
-        value={value}
-        onChange={onChange}
-        required={required}
-        placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-      />
+    <div className="min-w-0">
+      <label htmlFor={htmlFor} className="label">
+        {label}
+        {optional && <span className="optional"> (optional)</span>}
+      </label>
+      {children}
+      {hint && <p id={`${htmlFor}-hint`} className="hint">{hint}</p>}
     </div>
   )
 }
+ 

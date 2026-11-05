@@ -1,0 +1,28 @@
+/* Skin for react-datepicker. Imported AFTER the library's own stylesheet in app/book/page.js. */
+ 
+.react-datepicker-wrapper, .dp-wrap { display: block; width: 100%; }
+.react-datepicker-popper { z-index: 40; }
+.react-datepicker__triangle { display: none; }
+ 
+.react-datepicker {
+  font-family: inherit; max-width: 100vw;
+  border: 0; border-radius: 0; background: #fff; color: var(--ink);
+  box-shadow: 0 16px 40px rgba(13, 27, 18, 0.22);
+}
+.react-datepicker__header { background: var(--green); border-bottom: 0; border-radius: 0 !important; padding-top: 0.75rem; }
+.react-datepicker__current-month, .react-datepicker__day-name { color: #fff; font-weight: 700; }
+.react-datepicker__navigation-icon::before { border-color: #fff; }
+ 
+.react-datepicker__day-name, .react-datepicker__day { width: 2.5rem; line-height: 2.5rem; margin: 0.1rem; }
+.react-datepicker__day { border-radius: 0; color: var(--ink); font-weight: 600; }
+.react-datepicker__day--disabled { color: #a9b4ac !important; font-weight: 400; background: transparent !important; cursor: not-allowed; }
+.react-datepicker__day:hover:not(.react-datepicker__day--disabled) { background: var(--tint); border-radius: 0; }
+.react-datepicker__day--keyboard-selected { background: var(--tint); }
+.react-datepicker__day--selected, .react-datepicker__day--selected:hover { background: var(--gold) !important; color: var(--gold-ink) !important; }
+.react-datepicker__day--today { box-shadow: inset 0 -3px 0 var(--green); }
+.react-datepicker__portal { background: rgba(13, 27, 18, 0.5); }
+ 
+@media (max-width: 24rem) {
+  .react-datepicker__day-name, .react-datepicker__day { width: 2.25rem; line-height: 2.25rem; margin: 0.05rem; }
+}
+ 
