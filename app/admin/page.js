@@ -60,6 +60,29 @@ function CustomDateHeader({ date, label, isOffRange }) {
   )
 }
  
+// Replaces react-big-calendar's toolbar: month name on the left, three
+// buttons on the right, one tight row. Full control, nothing to fight.
+function CustomToolbar({ label, onNavigate }) {
+  return (
+    <div className="cal-toolbar">
+      <h2 className="cal-month">{label}</h2>
+      <div className="cal-nav">
+        <button type="button" onClick={() => onNavigate('TODAY')}>Today</button>
+        <button type="button" aria-label="Previous month" onClick={() => onNavigate('PREV')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </button>
+        <button type="button" aria-label="Next month" onClick={() => onNavigate('NEXT')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+ 
 // Supplier and P.O. number inside a calendar block
 function CustomEvent({ event }) {
   const a = event.resource
@@ -216,7 +239,7 @@ export default function AdminPage() {
     <div className={`min-h-[100dvh] ${panelOpen ? 'lg:pr-[24rem]' : ''}`}>
       <HospitalHeader>
         <button type="button" className="btn btn-quiet btn-sm" onClick={() => setPanelOpen((open) => !open)}>
-          {panelOpen ? 'Hide list' : <><span className="hidden sm:inline">Appointment </span>list</>}
+          {panelOpen ? 'Hide list' : <><span className="sm:hidden">List</span><span className="hidden sm:inline">Appointment list</span></>}
         </button>
         <button type="button" className="navlink" onClick={handleLogout}>Log out</button>
       </HospitalHeader>
@@ -240,7 +263,7 @@ export default function AdminPage() {
               defaultView="month"
               date={currentDate}
               onNavigate={(newDate) => setCurrentDate(newDate)}
-              components={{ month: { dateHeader: CustomDateHeader }, event: CustomEvent }}
+              components={{ month: { dateHeader: CustomDateHeader }, event: CustomEvent, toolbar: CustomToolbar }}
               dayPropGetter={(date) => {
                 const holiday = getHoliday(format(date, 'yyyy-MM-dd'))
                 const day = date.getDay() // 0 = Sun, 6 = Sat

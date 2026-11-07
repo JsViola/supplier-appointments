@@ -44,11 +44,12 @@ export default function HomePage() {
             <div className="order-first lg:order-none rise" style={{ '--i': 1 }}>
               <span className="disc mx-auto block h-28 w-28 sm:h-40 sm:w-40 lg:h-[26rem] lg:w-[26rem]">
                 <Image
-                  src="/lpgh-logo.png"
+                  src="/lpgh-logo-hero.png"
                   alt="Las Piñas General Hospital and Satellite Trauma Center seal"
-                  width={400}
-                  height={400}
+                  width={762}
+                  height={762}
                   priority
+                  sizes="(min-width: 1024px) 416px, (min-width: 640px) 160px, 112px"
                   className="h-full w-full"
                 />
               </span>
@@ -97,6 +98,7 @@ export default function HomePage() {
             <span className="disc block h-14 w-14">
               <Image src="/mms-seal.png" alt="Materials Management Section seal" width={124} height={124} className="h-full w-full" />
             </span>
+            
             <p className="footer-name">Las Piñas General Hospital &amp; Satellite Trauma Center</p>
             <p className="lead" style={{ color: '#dbe7dd' }}>
               Materials Management Section, Bernabe Compound, Pulanglupa I, Las Piñas City

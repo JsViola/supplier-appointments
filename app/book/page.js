@@ -84,10 +84,15 @@ export default function BookPage() {
   const [submitting, setSubmitting] = useState(false)
   const turnstileRef = useRef(null)
  
-  // Phones and tablets get the calendar as a centered sheet, and no keyboard
+  // Small screens and touch devices get the calendar as a centered sheet,
+  // and no keyboard. Follows the window if it is resized.
   const [coarse, setCoarse] = useState(false)
   useEffect(() => {
-    setCoarse(window.matchMedia('(pointer: coarse)').matches)
+    const mq = window.matchMedia('(pointer: coarse), (max-width: 40rem)')
+    const update = () => setCoarse(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
   }, [])
   const selectedCountry = COUNTRY_CODES.find((c) => c.code === countryCode)
  
@@ -596,8 +601,7 @@ export default function BookPage() {
               <div className="flex gap-2">
                 <select
                   aria-label="Country code"
-                  className="input"
-                  style={{ width: '8rem', flexShrink: 0 }}
+                  className="input input-code"
                   value={countryCode}
                   onChange={handleCountryChange}
                 >
@@ -608,8 +612,7 @@ export default function BookPage() {
                 <input
                   id="contact_number"
                   name="contact_number"
-                  className="input"
-                  style={{ flex: '1 1 0%', minWidth: 0 }}
+                  className="input input-grow"
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel-national"

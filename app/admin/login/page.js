@@ -42,8 +42,13 @@ export default function AdminLogin() {
     <div className="login">
       <aside className="login-side">
         <Link href="/" className="brand" aria-label="Las Piñas General Hospital. Go to the home page.">
-          <span className="disc h-12 w-12 lg:h-14 lg:w-14">
-            <Image src="/lpgh-logo.png" alt="" width={400} height={400} priority className="h-full w-full" />
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="disc h-11 w-11 lg:h-14 lg:w-14">
+              <Image src="/lpgh-logo.png" alt="" width={400} height={400} priority className="h-full w-full" />
+            </span>
+            <span className="disc h-11 w-11 lg:h-14 lg:w-14">
+              <Image src="/mms-seal.png" alt="" width={124} height={124} priority className="h-full w-full" />
+            </span>
           </span>
           <span className="min-w-0">
             <span className="block text-base font-bold leading-tight">Las Piñas General Hospital</span>
@@ -104,7 +109,8 @@ export default function AdminLogin() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-pressed={showPassword}
-                  className="navlink absolute right-1 top-1/2 -translate-y-1/2 px-3 text-sm"
+                  className="navlink absolute right-1 top-1/2 -translate-y-1/2 text-sm"
+                  style={{ padding: '0.75rem' }}
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>

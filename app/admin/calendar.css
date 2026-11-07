@@ -2,18 +2,18 @@
  
 .rbc-calendar { font-family: inherit; }
  
-/* Toolbar: month name on the left, Today / Back / Next on the right */
-.rbc-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 1rem; }
-.rbc-toolbar .rbc-toolbar-label { order: -1; flex: 1 1 10rem; margin: 0; padding: 0; text-align: left; font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
-.rbc-btn-group { display: flex; gap: 2px; }
-.rbc-toolbar button {
-  min-height: 44px; padding: 0 1rem; border: 0; border-radius: 0 !important;
-  background: var(--tint); color: var(--ink); font-size: 0.9375rem; font-weight: 700;
+/* Toolbar, drawn by CustomToolbar in the page */
+.cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 0.75rem; margin-bottom: 0.75rem; }
+.cal-month { margin: 0; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: var(--ink); }
+.cal-nav { display: flex; gap: 2px; }
+.cal-nav button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 0 0.875rem; border: 0; border-radius: 0;
+  background: var(--tint); color: var(--ink); font-size: 0.9375rem; font-weight: 700; cursor: pointer;
   transition: transform 160ms var(--ease-out), background-color 160ms ease;
 }
-.rbc-toolbar button:active { transform: scale(0.97); }
-.rbc-toolbar button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
-@media (hover: hover) and (pointer: fine) { .rbc-toolbar button:hover { background: #d8e1da; } }
+.cal-nav button:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .cal-nav button:hover { background: #d8e1da; } }
  
 /* Grid */
 .rbc-month-view { border: 0; }
@@ -45,8 +45,8 @@
  
 /* Phones: seven narrow columns, no sideways scrolling */
 @media (max-width: 40rem) {
-  .rbc-toolbar .rbc-toolbar-label { font-size: 1.125rem; }
-  .rbc-toolbar button { padding: 0 0.75rem; }
+  .cal-month { font-size: 1.125rem; }
+  .cal-nav button { padding: 0 0.75rem; }
   .rbc-header { font-size: 0.6875rem; padding: 0.5rem 0; }
   .rbc-date-cell { padding: 0.25rem; }
   .cal-holiday { display: none; }

@@ -1,5 +1,8 @@
 @import "tailwindcss";
-
+ 
+/* ------------------------------------------------------------------ */
+/* Tokens. Colours come from the hospital logo: deep green and gold.   */
+/* ------------------------------------------------------------------ */
 :root {
   color-scheme: light;
  
@@ -18,6 +21,8 @@
   --danger-tint: #fde8e6;
  
   /* Motion (Emil Kowalski's curves) */
+  --topbar: 56px;
+ 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -66,7 +71,7 @@ button, [role="button"] {
   font-weight: 800;
 }
 .title {
-  font-size: clamp(2rem, 1.2rem + 3vw, 3.25rem);
+  font-size: clamp(1.75rem, 1rem + 3vw, 3.25rem);
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -89,7 +94,11 @@ button, [role="button"] {
 .section { padding-block: clamp(3rem, 6vw, 7.5rem); }
  
 .topbar { background: var(--ground); padding-top: env(safe-area-inset-top, 0px); }
-.topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 64px; }
+.topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-height: var(--topbar); }
+@media (min-width: 40rem) { :root { --topbar: 64px; } .topbar-inner { gap: 1rem; } }
+/* The hospital name only shows when there is room beside the logos and buttons */
+.brand-text { display: none; min-width: 0; }
+@media (min-width: 30rem) { .brand-text { display: block; } }
 .brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; color: inherit; text-decoration: none; }
 .brand-name { font-weight: 700; font-size: 0.9375rem; line-height: 1.2; }
 .brand-sub { font-size: 0.8125rem; color: var(--ink-soft); line-height: 1.2; }
@@ -120,7 +129,7 @@ button, [role="button"] {
   align-items: center;
   gap: 2rem;
   padding-block: 2rem 3rem;
-  min-height: calc(100svh - 64px - env(safe-area-inset-top, 0px));
+  min-height: calc(100svh - var(--topbar) - env(safe-area-inset-top, 0px));
 }
 @media (min-width: 64rem) {
   .hero-inner { grid-template-columns: 1.3fr 1fr; gap: 4rem; padding-block: 3rem; }
@@ -229,12 +238,12 @@ select.input {
 .success-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
  
 /* Login */
-.login { min-height: 100svh; display: grid; }
-@media (min-width: 64rem) { .login { grid-template-columns: 5fr 6fr; } }
+.login { min-height: 100svh; display: grid; grid-template-rows: auto 1fr; }
+@media (min-width: 64rem) { .login { grid-template-columns: 5fr 6fr; grid-template-rows: 1fr; } }
 .login-side {
   background: var(--green); color: #fff;
-  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) clamp(1rem, 4vw, 3rem) 1.5rem;
-  display: flex; flex-direction: column; gap: 2rem;
+  padding: calc(1rem + env(safe-area-inset-top, 0px)) clamp(1rem, 4vw, 3rem) 1rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
 }
 @media (min-width: 64rem) { .login-side { padding-block: 3rem; justify-content: space-between; } }
 .login-main { display: flex; align-items: center; padding: 2rem clamp(1rem, 4vw, 4rem) calc(2rem + env(safe-area-inset-bottom, 0px)); }
@@ -309,10 +318,14 @@ select.input {
 /* ------------------------------------------------------------------ */
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.rise { animation: rise 300ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+/* fill-mode is backwards, not both: once the entrance ends, the element drops its stacking
+   context, so pop-ups (the date picker) can sit above the sections below. */
+.rise { animation: rise 300ms var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+/* The section holding a focused field always sits on top of its neighbours */
+.panel:focus-within { position: relative; z-index: 10; }
  
 @media (prefers-reduced-motion: reduce) {
-  .rise { animation: fade-in 200ms ease both; animation-delay: 0ms; }
+  .rise { animation: fade-in 200ms ease backwards; animation-delay: 0ms; }
   .btn:active, .icon-btn:active, .seg button:active { transform: none; }
   .dialog { transition: opacity 150ms ease; }
   .drawer { transition: none; }
@@ -322,8 +335,10 @@ select.input {
 .line { transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
 @starting-style { .line { opacity: 0; transform: translateY(6px); } }
  
-
 /* Country code box and the number box sit side by side. These must come
    after .input so they win over its width: 100%. */
 .input-code { width: 8rem; flex-shrink: 0; }
 .input-grow { flex: 1 1 0%; min-width: 0; width: auto; }
+ 
+/* Room for the bot-check widget (about 65px tall) so nothing slides over it */
+.turnstile-box { display: flex; justify-content: center; min-height: 68px; }
