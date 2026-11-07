@@ -1,33 +1,33 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import HospitalHeader from '@/components/HospitalHeader'
- 
+
 const READY = [
   {
     title: 'The P.O. number',
     text: 'Written as the year, the month, and a four-digit number, for example 2026-10-0613.',
   },
   {
-    title: 'The confirmation date and delivery terms',
-    text: 'Both are on your purchase order. The terms are the number of days you have to deliver, counted in calendar days or working days.',
+    title: 'Confirmation date and delivery terms',
+    text: 'Both are on your purchase order. Terms state how many calendar or working days you have to deliver.',
   },
   {
     title: 'What you are delivering',
-    text: 'Choose full delivery, or partial delivery with the item numbers from the P.O. and the boxes for each.',
+    text: 'Choose full delivery, or partial delivery with the P.O. item numbers and box quantities.',
   },
   {
     title: 'A mobile number we can reach',
-    text: 'Philippine numbers start with 9. Numbers from other countries are accepted with their country code.',
+    text: 'Philippine numbers start with 9. Other countries are accepted with their country code.',
   },
 ]
- 
+
 export default function HomePage() {
   return (
     <>
       <HospitalHeader>
         <Link href="/admin/login" className="navlink">Admin login</Link>
       </HospitalHeader>
- 
+
       <main>
         <section className="hero">
           <div className="shell hero-inner">
@@ -40,70 +40,116 @@ export default function HomePage() {
                 <Link href="/book" className="btn btn-gold">Book a delivery</Link>
               </div>
             </div>
- 
+
             <div className="order-first lg:order-none rise" style={{ '--i': 1 }}>
-              <span className="disc mx-auto block h-28 w-28 sm:h-40 sm:w-40 lg:h-[26rem] lg:w-[26rem]">
+              <span className="disc mx-auto block h-28 w-28 sm:h-40 sm:w-40 lg:h-[26rem] lg:w-[26rem] overflow-hidden rounded-full">
                 <Image
-                  src="/lpgh-logo-hero.png"
-                  alt="Las Piñas General Hospital and Satellite Trauma Center seal"
-                  width={762}
-                  height={762}
+                  src="/DAMS_logo_hero.png"
+                  alt="Delivery Appointment Management System Logo"
+                  width={1024}
+                  height={1024}
                   priority
                   sizes="(min-width: 1024px) 416px, (min-width: 640px) 160px, 112px"
-                  className="h-full w-full"
+                  className="h-full w-full object-cover scale-100 translate-y-3"
                 />
               </span>
             </div>
           </div>
         </section>
- 
-        <section className="shell section">
-          <div className="grid gap-8 lg:grid-cols-[1fr_1.5fr] lg:gap-16">
-            <h2 className="title">Have these ready</h2>
-            <ol className="grid gap-8">
-              {READY.map((item) => (
-                <li key={item.title}>
-                  <p className="h2">{item.title}</p>
-                  <p className="lead text-soft mt-2">{item.text}</p>
+
+        <section className="announcement-section shell" aria-labelledby="announcement-title">
+          <div className="announcement-card">
+            <div className="announcement-heading">
+              <span className="announcement-kicker">Materials Management Section</span>
+              <h2 id="announcement-title">Announcement</h2>
+            </div>
+            <Image
+              src="/mms-announcement.jpg"
+              alt="Materials Management Section announcement"
+              width={1600}
+              height={1000}
+              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 90vw, 1200px"
+              className="announcement-image"
+            />
+          </div>
+        </section>
+
+        <section className="home-guides shell" aria-label="Delivery appointment information">
+          <div className="guide-card ready-card">
+            <div className="guide-heading">
+              <span className="guide-eyebrow">Before you book</span>
+              <h2>Have these ready</h2>
+            </div>
+            <ol className="ready-list">
+              {READY.map((item, index) => (
+                <li key={item.title} className="ready-item">
+                  <span className="ready-number">{index + 1}</span>
+                  <div>
+                    <h3>{item.title}</h3>
+                    <p>{item.text}</p>
+                  </div>
                 </li>
               ))}
             </ol>
           </div>
-        </section>
- 
-        <section className="field-tint">
-          <div className="shell section grid gap-8 lg:grid-cols-[1fr_1.5fr] lg:gap-16">
-            <h2 className="title">How delivery days are counted</h2>
-            <div className="grid gap-8">
-              <div>
-                <p className="h2">Calendar days</p>
-                <p className="lead text-soft mt-2">
-                  Every day counts, including weekends and holidays. You may deliver on any day inside your window.
-                </p>
-              </div>
-              <div>
-                <p className="h2">Working days</p>
-                <p className="lead text-soft mt-2">
-                  Monday to Friday count. Weekends and Philippine regular holidays are skipped, and you may only deliver on a working day.
-                </p>
-              </div>
+
+          <div className="guide-card days-card">
+            <div className="guide-heading">
+              <span className="guide-eyebrow">Know your delivery window</span>
+              <h2>How delivery days are counted</h2>
+            </div>
+            <div className="day-types">
+              <article className="day-type">
+                <h3>Calendar days</h3>
+                <p>Every day counts, including weekends and holidays. You may deliver on any day inside your window.</p>
+              </article>
+              <article className="day-type">
+                <h3>Working days</h3>
+                <p>Monday to Friday count. Weekends and Philippine regular holidays are skipped, and delivery is allowed only on a working day.</p>
+              </article>
             </div>
           </div>
         </section>
       </main>
- 
+
       <footer className="footer">
         <div className="shell section grid gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-end">
           <div className="grid gap-3">
-            <span className="disc block h-14 w-14">
-              <Image src="/mms-seal.png" alt="Materials Management Section seal" width={124} height={124} className="h-full w-full" />
-            </span>
-            
-            <p className="footer-name">Las Piñas General Hospital &amp; Satellite Trauma Center</p>
+
+            {/* Organization Logos */}
+            <div className="flex items-center gap-3">
+              {/* Materials Management Section Logo */}
+              <span className="disc block h-14 w-14 overflow-hidden rounded-full">
+                <Image
+                  src="/mms-seal.png"
+                  alt="Materials Management Section seal"
+                  width={124}
+                  height={124}
+                  className="h-full w-full object-contain"
+                />
+              </span>
+
+              {/* Las Piñas General Hospital Logo */}
+              <span className="disc block h-14 w-14 overflow-hidden rounded-full">
+                <Image
+                  src="/lpgh-logo.png"
+                  alt="Las Piñas General Hospital logo"
+                  width={124}
+                  height={124}
+                  className="h-full w-full object-contain"
+                />
+              </span>
+            </div>
+
+            <p className="footer-name">
+              Las Piñas General Hospital &amp; Satellite Trauma Center
+            </p>
+
             <p className="lead" style={{ color: '#dbe7dd' }}>
               Materials Management Section, Bernabe Compound, Pulanglupa I, Las Piñas City
             </p>
           </div>
+
           <div className="flex flex-wrap gap-x-6 gap-y-1 lg:justify-end">
             <Link href="/book" className="navlink">Book a delivery</Link>
             <Link href="/admin/login" className="navlink">Admin login</Link>
@@ -113,4 +159,3 @@ export default function HomePage() {
     </>
   )
 }
- 
