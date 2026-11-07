@@ -461,7 +461,7 @@ export default function BookPage() {
                 disabled={!deliveryWindow}
                 required
                 withPortal={coarse}
-                readOnly={coarse}
+                customInput={<input inputMode={coarse ? 'none' : 'text'} />}
                 autoComplete="off"
                 placeholderText={deliveryWindow ? 'Choose a date' : 'Fill in the terms first'}
                 dateFormat="MMM d, yyyy"
