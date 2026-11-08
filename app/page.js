@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import HospitalHeader from '@/components/HospitalHeader'
-
+ 
 const READY = [
   {
     title: 'The P.O. number',
@@ -20,14 +20,14 @@ const READY = [
     text: 'Philippine numbers start with 9. Other countries are accepted with their country code.',
   },
 ]
-
+ 
 export default function HomePage() {
   return (
     <>
       <HospitalHeader>
         <Link href="/admin/login" className="navlink">Admin login</Link>
       </HospitalHeader>
-
+ 
       <main>
         <section className="hero">
           <div className="shell hero-inner">
@@ -41,22 +41,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="order-first lg:order-none rise" style={{ '--i': 1 }}>
-              <span className="disc mx-auto block h-28 w-28 sm:h-40 sm:w-40 lg:h-[26rem] lg:w-[26rem] overflow-hidden rounded-full">
-                <Image
-                  src="/DAMS_logo_hero.png"
-                  alt="Delivery Appointment Management System Logo"
-                  width={1024}
-                  height={1024}
-                  priority
-                  sizes="(min-width: 1024px) 416px, (min-width: 640px) 160px, 112px"
-                  className="h-full w-full object-cover scale-100 translate-y-3"
-                />
-              </span>
-            </div>
           </div>
         </section>
-
+ 
         <section className="announcement-section shell" aria-labelledby="announcement-title">
           <div className="announcement-card">
             <div className="announcement-heading">
@@ -73,7 +60,7 @@ export default function HomePage() {
             />
           </div>
         </section>
-
+ 
         <section className="home-guides shell" aria-label="Delivery appointment information">
           <div className="guide-card ready-card">
             <div className="guide-heading">
@@ -92,7 +79,7 @@ export default function HomePage() {
               ))}
             </ol>
           </div>
-
+ 
           <div className="guide-card days-card">
             <div className="guide-heading">
               <span className="guide-eyebrow">Know your delivery window</span>
@@ -111,11 +98,11 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-
+ 
       <footer className="footer">
         <div className="shell section grid gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-end">
           <div className="grid gap-3">
-
+ 
             {/* Organization Logos */}
             <div className="flex items-center gap-3">
               {/* Materials Management Section Logo */}
@@ -128,7 +115,7 @@ export default function HomePage() {
                   className="h-full w-full object-contain"
                 />
               </span>
-
+ 
               {/* Las Piñas General Hospital Logo */}
               <span className="disc block h-14 w-14 overflow-hidden rounded-full">
                 <Image
@@ -140,16 +127,16 @@ export default function HomePage() {
                 />
               </span>
             </div>
-
+ 
             <p className="footer-name">
               Las Piñas General Hospital &amp; Satellite Trauma Center
             </p>
-
+ 
             <p className="lead" style={{ color: '#dbe7dd' }}>
               Materials Management Section, Bernabe Compound, Pulanglupa I, Las Piñas City
             </p>
           </div>
-
+ 
           <div className="flex flex-wrap gap-x-6 gap-y-1 lg:justify-end">
             <Link href="/book" className="navlink">Book a delivery</Link>
             <Link href="/admin/login" className="navlink">Admin login</Link>
@@ -159,3 +146,4 @@ export default function HomePage() {
     </>
   )
 }
+ 

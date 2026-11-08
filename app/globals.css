@@ -20,9 +20,9 @@
   --danger: #b42318;
   --danger-tint: #fde8e6;
  
-  /* Motion (Emil Kowalski's curves) */
   --topbar: 56px;
  
+  /* Motion (Emil Kowalski's curves) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -128,11 +128,19 @@ button, [role="button"] {
   display: grid;
   align-items: center;
   gap: 2rem;
-  padding-block: 2rem 3rem;
-  min-height: calc(100svh - var(--topbar) - env(safe-area-inset-top, 0px));
+  /* Natural height on phones and tablets: fills the screen with a
+     circular logo, heading, lead, and button, then gets out of the way
+     so the Announcement below is not a full scroll away. Only at desktop
+     width, with room for a true two-column hero, does it fill the screen. */
+  padding-block: clamp(2.5rem, 10vw, 3.5rem);
 }
 @media (min-width: 64rem) {
-  .hero-inner { grid-template-columns: 1.3fr 1fr; gap: 4rem; padding-block: 3rem; }
+  .hero-inner {
+    grid-template-columns: 1.3fr 1fr;
+    gap: 4rem;
+    padding-block: 3rem;
+    min-height: calc(100svh - var(--topbar) - env(safe-area-inset-top, 0px));
+  }
 }
 .hero-lead { color: #dbe7dd; margin-top: 2rem; }
 .hero-cta { margin-top: 2.5rem; }
@@ -446,7 +454,7 @@ select.input {
   background: var(--ground);
   border-left: 3px solid var(--gold);
 }
-
+ 
 @media (max-width: 900px) {
   .home-guides { grid-template-columns: 1fr; }
   .ready-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -461,3 +469,4 @@ select.input {
   .ready-list { grid-template-columns: 1fr; gap: 0.8rem; }
   .ready-item p, .day-type p { font-size: 0.84rem; }
 }
+ 
