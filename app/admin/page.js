@@ -1,5 +1,5 @@
 'use client'
- 
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar'
@@ -13,10 +13,10 @@ import { supabase } from '@/lib/supabaseClient'
 import { getHoliday } from '@/lib/holidays'
 import HospitalHeader from '@/components/HospitalHeader'
 import './calendar.css'
- 
+
 const locales = {}
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales })
- 
+
 // One place for status colours: the calendar blocks, the list dots, and
 // the legend all read from here.
 const STATUS_STYLE = {
@@ -27,17 +27,17 @@ const STATUS_STYLE = {
 }
 const STATUS_FALLBACK = { bg: '#475569', fg: '#ffffff', label: 'Unknown' }
 const statusStyle = (status) => STATUS_STYLE[status] || STATUS_FALLBACK
- 
+
 // "Oct 25, 2026 · 3:42 PM", in the viewer's local time
 function formatSubmitted(ts) {
   return ts ? format(new Date(ts), 'MMM d, yyyy · h:mm a') : 'n/a'
 }
- 
+
 // "Wed, Oct 14, 2026" from a plain YYYY-MM-DD string
 function formatDay(dateStr) {
   return dateStr ? format(new Date(`${dateStr}T00:00:00`), 'EEE, MMM d, yyyy') : 'n/a'
 }
- 
+
 // A full delivery is saved as one item named "Full delivery"; partial items
 // carry an item_number. Older appointments have neither, so no label.
 function getDeliveryType(appt) {
@@ -47,7 +47,7 @@ function getDeliveryType(appt) {
   if (first.item_number) return 'Partial delivery'
   return null
 }
- 
+
 // Date number in each month cell, plus the holiday name when there is one.
 // react-big-calendar passes `isOffRange` for days of the neighbouring months.
 function CustomDateHeader({ date, label, isOffRange }) {
@@ -59,7 +59,7 @@ function CustomDateHeader({ date, label, isOffRange }) {
     </div>
   )
 }
- 
+
 // Replaces react-big-calendar's toolbar: month name on the left, three
 // buttons on the right, one tight row. Full control, nothing to fight.
 function CustomToolbar({ label, onNavigate }) {
@@ -82,7 +82,7 @@ function CustomToolbar({ label, onNavigate }) {
     </div>
   )
 }
- 
+
 // Supplier and P.O. number inside a calendar block
 function CustomEvent({ event }) {
   const a = event.resource
@@ -92,7 +92,7 @@ function CustomEvent({ event }) {
     </span>
   )
 }
- 
+
 export default function AdminPage() {
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -103,7 +103,8 @@ export default function AdminPage() {
   const [moreEvents, setMoreEvents] = useState(null) // { date, events }
   const [panelOpen, setPanelOpen] = useState(false)
   const [newestFirst, setNewestFirst] = useState(true)
- 
+  const [listQuery, setListQuery] = useState('')
+
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -116,17 +117,17 @@ export default function AdminPage() {
     checkAuth()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
- 
+
   useEffect(() => {
     async function loadAppointments() {
       const { data, error } = await supabase.from('appointments').select('*')
- 
+
       if (error) {
         console.error(error)
         toast.error('Could not load the appointments. Please refresh the page.')
         return
       }
- 
+
       setEvents(
         data.map((appt) => {
           const start = new Date(`${appt.tentative_delivery_date}T00:00:00`)
@@ -140,20 +141,20 @@ export default function AdminPage() {
         })
       )
     }
- 
+
     loadAppointments()
   }, [])
- 
+
   function openAppt(appt) {
     setConfirmingDelete(false)
     setSelectedAppt(appt)
   }
- 
+
   function closeAppt() {
     setSelectedAppt(null)
     setConfirmingDelete(false)
   }
- 
+
   // Escape closes whatever is on top: popup, then day list, then side panel.
   useEffect(() => {
     function onKey(e) {
@@ -165,7 +166,7 @@ export default function AdminPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedAppt, moreEvents, panelOpen])
- 
+
   // Stop the page behind a popup from scrolling.
   useEffect(() => {
     if (!selectedAppt && !moreEvents) return
@@ -175,35 +176,35 @@ export default function AdminPage() {
       document.body.style.overflow = previous
     }
   }, [selectedAppt, moreEvents])
- 
+
   // Deletes the row, then removes it from local state so the calendar
   // updates at once. The "are you sure" step is the two-button row in the popup.
   async function handleDelete(apptId) {
     const { error } = await supabase.from('appointments').delete().eq('id', apptId)
- 
+
     if (error) {
       console.error(error)
       toast.error('Could not delete this appointment. Please try again.')
       return
     }
- 
+
     setEvents((prev) => prev.filter((e) => e.resource.id !== apptId))
     closeAppt()
     toast.success('Appointment deleted')
   }
- 
+
   // Saves the new status, then updates the calendar and the open popup.
   async function handleStatusChange(apptId, newStatus) {
     if (selectedAppt?.status === newStatus) return
- 
+
     const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', apptId)
- 
+
     if (error) {
       console.error(error)
       toast.error('Could not update the status. Please try again.')
       return
     }
- 
+
     setEvents((prev) =>
       prev.map((e) =>
         e.resource.id === apptId ? { ...e, resource: { ...e.resource, status: newStatus } } : e
@@ -212,18 +213,18 @@ export default function AdminPage() {
     setSelectedAppt((prev) => (prev ? { ...prev, status: newStatus } : prev))
     toast.success(`Marked as ${statusStyle(newStatus).label.toLowerCase()}`)
   }
- 
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/admin/login')
   }
- 
+
   if (checkingAuth) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center text-soft">Checking login…</div>
     )
   }
- 
+
   // Every appointment, ordered by when it was submitted. map() makes a copy,
   // so sorting never touches the calendar's own data.
   const sortedAppts = events
@@ -233,8 +234,20 @@ export default function AdminPage() {
         ? new Date(b.created_at) - new Date(a.created_at)
         : new Date(a.created_at) - new Date(b.created_at)
     )
+
+  // Matches the P.O. number or the supplier name, case-insensitively.
+  // Trimmed so a trailing space from a phone keyboard doesn't hide everything.
+  const query = listQuery.trim().toLowerCase()
+  const visibleAppts = query
+    ? sortedAppts.filter(
+        (a) =>
+          a.po_number?.toLowerCase().includes(query) ||
+          a.supplier?.toLowerCase().includes(query)
+      )
+    : sortedAppts
+
   const pendingCount = events.filter((e) => e.resource.status === 'pending').length
- 
+
   return (
     <div className={`min-h-[100dvh] ${panelOpen ? 'lg:pr-[24rem]' : ''}`}>
       <HospitalHeader>
@@ -243,7 +256,7 @@ export default function AdminPage() {
         </button>
         <button type="button" className="navlink" onClick={handleLogout}>Log out</button>
       </HospitalHeader>
- 
+
       <main className="shell pb-10">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-5 pt-2">
           <h1 className="title">Delivery appointments</h1>
@@ -251,7 +264,7 @@ export default function AdminPage() {
             {events.length} {events.length === 1 ? 'appointment' : 'appointments'} · {pendingCount} pending
           </p>
         </div>
- 
+
         <div className="panel" style={{ padding: 'clamp(0.75rem, 2vw, 1.5rem)' }}>
           <div style={{ height: 'clamp(30rem, 78dvh, 48rem)' }}>
             <Calendar
@@ -280,7 +293,7 @@ export default function AdminPage() {
             />
           </div>
         </div>
- 
+
         <div className="legend small text-soft mt-4">
           <span className="inline-flex items-center"><span className="dot" style={{ background: STATUS_STYLE.pending.bg }} />Pending</span>
           <span className="inline-flex items-center"><span className="dot" style={{ background: STATUS_STYLE.delivered.bg }} />Delivered</span>
@@ -288,7 +301,7 @@ export default function AdminPage() {
           <span className="inline-flex items-center"><span className="dot" style={{ background: '#fbe3e0', boxShadow: 'inset 0 0 0 1px #e8b4ad' }} />Holiday</span>
         </div>
       </main>
- 
+
       {/* Appointment popup */}
       {selectedAppt && (
         <div className="backdrop" onClick={closeAppt}>
@@ -306,7 +319,7 @@ export default function AdminPage() {
               </div>
               <button type="button" className="icon-btn" onClick={closeAppt} aria-label="Close">×</button>
             </div>
- 
+
             <div className="dialog-body">
               <div>
                 <p className="label">Status</p>
@@ -325,7 +338,7 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
- 
+
               <dl className="facts">
                 <div className="fact"><dt>Delivery date</dt><dd>{formatDay(selectedAppt.tentative_delivery_date)}</dd></div>
                 {getDeliveryType(selectedAppt) && (
@@ -343,7 +356,7 @@ export default function AdminPage() {
                 <div className="fact"><dt>Contact</dt><dd>{selectedAppt.contact_number || 'n/a'}</dd></div>
                 <div className="fact"><dt>Submitted</dt><dd>{formatSubmitted(selectedAppt.created_at)}</dd></div>
               </dl>
- 
+
               <div>
                 <p className="label">Items</p>
                 {(selectedAppt.items || []).length === 0 ? (
@@ -364,7 +377,7 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
- 
+
             <div className="dialog-foot">
               {confirmingDelete ? (
                 <>
@@ -383,7 +396,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
- 
+
       {/* "+N more" list for a busy day */}
       {moreEvents && (
         <div className="backdrop" onClick={() => setMoreEvents(null)}>
@@ -424,27 +437,57 @@ export default function AdminPage() {
           </div>
         </div>
       )}
- 
+
       {/* Side panel: every appointment, by when it was submitted */}
       {panelOpen && <div className="drawer-scrim" onClick={() => setPanelOpen(false)} />}
       <aside className="drawer" data-open={panelOpen} aria-label="All appointments" inert={!panelOpen}>
         <div className="flex items-start justify-between gap-2 px-5 pb-3 pt-4">
           <div>
             <h2 className="h2">All appointments</h2>
-            <p className="small text-soft mt-1">{sortedAppts.length} total</p>
+            <p className="small text-soft mt-1">
+              {query ? `${visibleAppts.length} of ${sortedAppts.length}` : `${sortedAppts.length} total`}
+            </p>
           </div>
           <button type="button" className="icon-btn" onClick={() => setPanelOpen(false)} aria-label="Close list">×</button>
         </div>
- 
-        <div className="px-5 pb-3">
-          <button type="button" className="btn btn-quiet btn-sm" onClick={() => setNewestFirst((v) => !v)}>
+
+        <div className="px-5 pb-3 grid gap-2.5">
+          <button type="button" className="btn btn-quiet btn-sm w-fit" onClick={() => setNewestFirst((v) => !v)}>
             {newestFirst ? 'Newest first ↓' : 'Oldest first ↑'}
           </button>
+
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="search"
+              enterKeyHint="search"
+              value={listQuery}
+              onChange={(e) => setListQuery(e.target.value)}
+              placeholder="Search P.O. number or supplier"
+              aria-label="Search appointments by P.O. number or supplier"
+              className="input"
+              style={{ paddingRight: listQuery ? '2.5rem' : undefined }}
+            />
+            {listQuery && (
+              <button
+                type="button"
+                onClick={() => setListQuery('')}
+                aria-label="Clear search"
+                className="absolute right-1 top-1/2 -translate-y-1/2 icon-btn"
+                style={{ width: '2rem', height: '2rem', fontSize: '1.25rem' }}
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
- 
+
         <div className="drawer-list">
           {sortedAppts.length === 0 && <p className="small text-soft px-5 py-4">No appointments yet.</p>}
-          {sortedAppts.map((a) => {
+          {sortedAppts.length > 0 && visibleAppts.length === 0 && (
+            <p className="small text-soft px-5 py-4">No appointments match &ldquo;{listQuery.trim()}&rdquo;.</p>
+          )}
+          {visibleAppts.map((a) => {
             const s = statusStyle(a.status)
             return (
               <button key={a.id} type="button" className="drawer-row" onClick={() => openAppt(a)}>
@@ -462,4 +505,3 @@ export default function AdminPage() {
     </div>
   )
 }
- 

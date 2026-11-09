@@ -470,3 +470,47 @@ select.input {
   .ready-item p, .day-type p { font-size: 0.84rem; }
 }
  
+/* Book page: a green backdrop behind the white form panels (same green
+   as the hero and footer). Only the text that sits directly on the green
+   — not inside a .panel — needs recoloured for contrast; each .panel
+   keeps its own white background and dark text untouched. */
+.book-green {
+  background: var(--green);
+  min-height: 100svh;
+}
+
+.book-green .topbar {
+  background: #fff;
+}
+
+.book-green .brand-name {
+  color: var(--green);
+}
+
+.book-green .brand-sub {
+  color: #666;
+}
+
+.book-green .navlink {
+  color: var(--green);
+}
+
+.book-green :focus-visible {
+  outline-color: var(--gold);
+}
+ 
+.book-green .form-intro .title,
+.book-green .success .title { color: #fff; }
+.book-green .form-intro .lead,
+.book-green .success .lead { color: #dbe7dd; }
+ 
+.book-green .error { color: #ffd4cd; }
+ 
+/* btn-primary is the same dark green as this page's background, so it
+   would vanish. Gold is already this app's one accent colour for a main
+   action on green (see the hero's "Book a delivery" button). */
+.book-green .btn-primary { background: var(--gold); color: var(--gold-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .book-green .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
+}
+ 

@@ -57,9 +57,6 @@ export default function AdminLogin() {
         </Link>
  
         <div className="hidden lg:block">
-          <span className="disc mb-8 block h-56 w-56">
-            <Image src="/lpgh-logo.png" alt="" width={400} height={400} className="h-full w-full" />
-          </span>
           <p className="footer-name">Delivery appointments, in one calendar.</p>
         </div>
       </aside>

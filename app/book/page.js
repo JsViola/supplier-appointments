@@ -297,7 +297,7 @@ export default function BookPage() {
  
   if (submitted) {
     return (
-      <>
+      <div className="book-green">
         <HospitalHeader>
           <Link href="/" className="navlink">Home</Link>
         </HospitalHeader>
@@ -311,12 +311,12 @@ export default function BookPage() {
             <Link href="/" className="btn btn-quiet">Back to home</Link>
           </div>
         </main>
-      </>
+      </div>
     )
   }
  
   return (
-    <>
+    <div className="book-green">
       <HospitalHeader>
         <Link href="/" className="navlink">Home</Link>
       </HospitalHeader>
@@ -660,7 +660,7 @@ export default function BookPage() {
           </div>
         </form>
       </main>
-    </>
+    </div>
   )
 }
  
