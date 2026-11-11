@@ -380,11 +380,17 @@ select.input {
   font-weight: 800;
   letter-spacing: -0.025em;
 }
+.announcement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  align-items: start;
+}
+.announcement-link { display: block; min-width: 0; }
 .announcement-image {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 38rem;
   object-fit: contain;
   object-position: center;
 }
@@ -456,13 +462,19 @@ select.input {
 }
  
 @media (max-width: 900px) {
+  .announcement-grid { grid-template-columns: 1fr; }
   .home-guides { grid-template-columns: 1fr; }
   .ready-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {
-  .announcement-section { padding-top: 1rem; }
-  .announcement-card { padding: 0.75rem; }
-  .announcement-heading { margin-bottom: 0.65rem; }
+  .announcement-section {
+    padding-top: 1rem;
+    padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
+  }
+  .announcement-card { padding: 0.75rem 0.25rem; }
+  .announcement-heading { margin-bottom: 0.65rem; padding-inline: 0.5rem; }
+  .announcement-grid { gap: 1rem; }
   .home-guides { gap: 0.75rem; padding-top: 0.75rem; }
   .guide-card { padding: 1rem; }
   .guide-heading { margin-bottom: 0.85rem; }
@@ -513,4 +525,3 @@ select.input {
 @media (hover: hover) and (pointer: fine) {
   .book-green .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
 }
- 

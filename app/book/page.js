@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import HospitalHeader from '@/components/HospitalHeader'
 import { Turnstile } from '@marsidev/react-turnstile'
 import { getDeliveryWindow, isSelectableDeliveryDate } from '@/lib/holidays'
+import { findClosure, getExtensionBlockReason, isSelectableExtensionDate, todayInManila } from '@/lib/scheduling'
  
 // react-datepicker works with real Date objects, but we store dates as
 // plain 'YYYY-MM-DD' strings everywhere else (form state, Supabase).
@@ -75,6 +76,13 @@ export default function BookPage() {
   })
   const [items, setItems] = useState([{ ...emptyItem }])
   const [deliveryType, setDeliveryType] = useState('') // '' | 'full' | 'partial'
+  // 'regular' follows delivery terms and a computed window; 'extension' is an
+  // open Monday-to-Friday schedule. Both respect admin date closures.
+  const [supplierType, setSupplierType] = useState('regular')
+  const isExtension = supplierType === 'extension'
+  // Upcoming admin closures: [{ start_date, end_date, reason }]
+  const [closures, setClosures] = useState([])
+  const [closuresFailed, setClosuresFailed] = useState(false)
   // Item numbers already used, so each number can only be picked once
   const usedNumbers = items.map((it) => it.item_number).filter(Boolean)
   const [submitted, setSubmitted] = useState(false)
@@ -104,11 +112,40 @@ export default function BookPage() {
     form.count_type
   )
  
+  // Closed dates come from the server. The server checks them again on
+  // submit, so a failed load only costs the visual hints, not safety.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/closures', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data) => {
+        if (cancelled) return
+        const list = Array.isArray(data.closures) ? data.closures : []
+        setClosures(list)
+        // A date picked before the list arrived may turn out to be closed.
+        setForm((f) => {
+          const closure = findClosure(f.tentative_delivery_date, list)
+          if (!closure) return f
+          toast.error(`That date is closed: ${closure.reason}. Please choose another date.`)
+          return { ...f, tentative_delivery_date: '' }
+        })
+      })
+      .catch((err) => {
+        console.error('Could not load closed dates', err)
+        if (!cancelled) setClosuresFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+ 
   // If the client already picked a delivery date and then goes back and
   // changes the confirmation date, terms, or count type, the previously
   // picked date can fall outside the new window. Clear it automatically
   // rather than leaving a now-invalid date sitting in the field.
+  // (Regular suppliers only. Extension suppliers have no window.)
   useEffect(() => {
+    if (isExtension) return
     if (
       form.tentative_delivery_date &&
       (!deliveryWindow || !isSelectableDeliveryDate(form.tentative_delivery_date, deliveryWindow, form.count_type))
@@ -120,6 +157,13 @@ export default function BookPage() {
  
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
+  }
+ 
+  // Ticking or unticking "Extension" changes which dates can be picked, so
+  // a date chosen under the other rule is cleared. The terms stay filled in.
+  function handleExtensionChange(e) {
+    setSupplierType(e.target.checked ? 'extension' : 'regular')
+    setForm((f) => ({ ...f, tentative_delivery_date: '' }))
   }
  
   // Keeps the P.O. Number locked to YYYY-MM-XXXX as the client types:
@@ -192,6 +236,7 @@ export default function BookPage() {
     })
     setItems([{ ...emptyItem }])
     setDeliveryType('')
+    setSupplierType('regular')
     setCountryCode('+63')
     setError(null)
     setSubmitted(false)
@@ -213,7 +258,19 @@ export default function BookPage() {
     e.preventDefault()
     setError(null)
  
-    if (!deliveryWindow || !isSelectableDeliveryDate(form.tentative_delivery_date, deliveryWindow, form.count_type)) {
+    const closedOnSubmit = findClosure(form.tentative_delivery_date, closures)
+    if (closedOnSubmit) {
+      setError(`That date is closed: ${closedOnSubmit.reason}. Please choose another date.`)
+      return
+    }
+ 
+    if (isExtension) {
+      const blocked = getExtensionBlockReason(form.tentative_delivery_date, closures)
+      if (blocked) {
+        setError(blocked)
+        return
+      }
+    } else if (!deliveryWindow || !isSelectableDeliveryDate(form.tentative_delivery_date, deliveryWindow, form.count_type)) {
       setError('Please choose a valid delivery date, within range and matching your selected count type.')
       return
     }
@@ -267,6 +324,7 @@ export default function BookPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          supplier_type: supplierType,
           contact_number: `${countryCode}${form.contact_number}`,
           items: itemsToSave,
           turnstileToken,
@@ -294,6 +352,39 @@ export default function BookPage() {
  
   const prettyDate = (s) =>
     parseDate(s)?.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+ 
+  const closureRange = (c) =>
+    c.start_date === c.end_date
+      ? prettyDate(c.start_date)
+      : `${prettyDate(c.start_date)} to ${prettyDate(c.end_date)}`
+ 
+  // Extension suppliers can pick from tomorrow onward, with no end date.
+  const extensionMinDate = (() => {
+    const d = parseDate(todayInManila())
+    d.setDate(d.getDate() + 1)
+    return d
+  })()
+ 
+  const datePickerReady = isExtension || Boolean(deliveryWindow)
+ 
+  // One rule for what can be clicked. Closed dates are blocked for both
+  // types; the rest is the type's own rule (regular logic is unchanged).
+  function isPickable(date) {
+    const s = formatDate(date)
+    if (findClosure(s, closures)) return false
+    if (isExtension) return isSelectableExtensionDate(s, closures)
+    return deliveryWindow ? isSelectableDeliveryDate(s, deliveryWindow, form.count_type) : false
+  }
+ 
+  function handleDatePicked(date) {
+    const s = formatDate(date)
+    const closure = findClosure(s, closures)
+    if (closure) {
+      toast.error(`${prettyDate(s)} is closed: ${closure.reason}`)
+      return
+    }
+    setForm({ ...form, tentative_delivery_date: s })
+  }
  
   if (submitted) {
     return (
@@ -372,18 +463,34 @@ export default function BookPage() {
           <section className="panel rise" style={{ '--i': 3 }} aria-labelledby="sec-terms">
             <h2 id="sec-terms" className="h2">Delivery terms</h2>
             <div className="grid gap-5 sm:grid-cols-3">
-              <Field label="Confirmation P.O. date" htmlFor="confirmation_po_date" hint="Counting starts the day after.">
-                <input
-                  id="confirmation_po_date"
-                  name="confirmation_po_date"
-                  className="input"
-                  type="date"
-                  required
-                  value={form.confirmation_po_date}
-                  onChange={handleChange}
-                  aria-describedby="confirmation_po_date-hint"
-                />
-              </Field>
+              <div className="min-w-0">
+                <Field label="Confirmation P.O. date" htmlFor="confirmation_po_date" hint="Counting starts the day after.">
+                  <input
+                    id="confirmation_po_date"
+                    name="confirmation_po_date"
+                    className="input"
+                    type="date"
+                    required
+                    value={form.confirmation_po_date}
+                    onChange={handleChange}
+                    aria-describedby="confirmation_po_date-hint"
+                  />
+                </Field>
+                <label htmlFor="is_extension" className="mt-3 flex min-h-11 cursor-pointer items-start gap-3">
+                  <input
+                    id="is_extension"
+                    name="is_extension"
+                    type="checkbox"
+                    className="mt-0.5 h-5 w-5 shrink-0"
+                    checked={isExtension}
+                    onChange={handleExtensionChange}
+                  />
+                  <span className="small">
+                    <strong>Extension</strong>
+                    <span className="text-soft"> Tick to pick any available weekday, with no delivery window.</span>
+                  </span>
+                </label>
+              </div>
               <Field label="Delivery terms (days)" htmlFor="delivery_terms" hint="The days stated on the P.O.">
                 <input
                   id="delivery_terms"
@@ -417,7 +524,14 @@ export default function BookPage() {
             </div>
  
             <div className="notice" aria-live="polite">
-              {deliveryWindow ? (
+              {isExtension ? (
+                <>
+                  <p className="notice-title">Extension: you can pick any available date.</p>
+                  <p className="small text-soft mt-1">
+                    There is no delivery window. Weekends, Philippine regular holidays, and dates closed by the Materials Management Section are not available. Delivery terms and count type are still required.
+                  </p>
+                </>
+              ) : deliveryWindow ? (
                 <>
                   <p className="notice-title">
                     You can deliver from {prettyDate(deliveryWindow.start)} to {prettyDate(deliveryWindow.end)}.
@@ -443,32 +557,63 @@ export default function BookPage() {
               label="Tentative delivery date"
               htmlFor="tentative_delivery_date"
               hint={
-                deliveryWindow
-                  ? 'Days you cannot pick are greyed out.'
+                datePickerReady
+                  ? 'Days you cannot pick are greyed out. Closed dates are shaded red.'
                   : 'Available once the delivery terms above are filled in.'
               }
             >
               <DatePicker
                 id="tentative_delivery_date"
                 selected={parseDate(form.tentative_delivery_date)}
-                onChange={(date) => setForm({ ...form, tentative_delivery_date: formatDate(date) })}
-                minDate={deliveryWindow ? parseDate(deliveryWindow.start) : null}
-                maxDate={deliveryWindow ? parseDate(deliveryWindow.end) : null}
-                filterDate={(date) =>
-                  deliveryWindow ? isSelectableDeliveryDate(formatDate(date), deliveryWindow, form.count_type) : false
-                }
-                openToDate={deliveryWindow ? parseDate(deliveryWindow.start) : undefined}
-                disabled={!deliveryWindow}
+                onChange={handleDatePicked}
+                minDate={isExtension ? extensionMinDate : deliveryWindow ? parseDate(deliveryWindow.start) : null}
+                maxDate={isExtension ? null : deliveryWindow ? parseDate(deliveryWindow.end) : null}
+                filterDate={isPickable}
+                openToDate={isExtension ? undefined : deliveryWindow ? parseDate(deliveryWindow.start) : undefined}
+                dayClassName={(date) => (findClosure(formatDate(date), closures) ? 'dp-closed' : '')}
+                renderDayContents={(day, date) => {
+                  const closure = findClosure(formatDate(date), closures)
+                  if (!closure) return day
+                  return (
+                    <span
+                      className="dp-closed-day"
+                      title={closure.reason}
+                      onClick={() => toast.error(`${prettyDate(formatDate(date))} is closed: ${closure.reason}`)}
+                    >
+                      {day}
+                    </span>
+                  )
+                }}
+                disabled={!datePickerReady}
                 required
                 withPortal={coarse}
                 customInput={<input inputMode={coarse ? 'none' : 'text'} />}
                 autoComplete="off"
-                placeholderText={deliveryWindow ? 'Choose a date' : 'Fill in the terms first'}
+                placeholderText={datePickerReady ? 'Choose a date' : 'Fill in the terms first'}
                 dateFormat="MMM d, yyyy"
                 className="input"
                 wrapperClassName="dp-wrap"
               />
             </Field>
+ 
+            {closures.length > 0 && (
+              <div className="notice mt-4">
+                <p className="notice-title">Closed dates</p>
+                <ul className="small text-soft mt-1">
+                  {closures.slice(0, 8).map((c) => (
+                    <li key={`${c.start_date}-${c.end_date}-${c.reason}`}>
+                      <strong>{closureRange(c)}</strong>: {c.reason}
+                    </li>
+                  ))}
+                  {closures.length > 8 && <li>and {closures.length - 8} more</li>}
+                </ul>
+              </div>
+            )}
+            {closuresFailed && (
+              <p className="small text-soft mt-3" role="status">
+                Closed dates could not be loaded. They are still checked when you submit.
+              </p>
+            )}
           </section>
  
           {/* Items */}
@@ -677,4 +822,3 @@ function Field({ label, htmlFor, hint, optional, children }) {
     </div>
   )
 }
- 

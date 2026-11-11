@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getDeliveryWindow, isSelectableDeliveryDate } from '@/lib/holidays'
+import { SUPPLIER_TYPES, findClosure, getExtensionBlockReason } from '@/lib/scheduling'
 
 // This file runs only on the server. It is the only place that talks to
 // Supabase with the service role key, which bypasses Row Level Security.
@@ -111,7 +112,7 @@ function validateItems(rawItems) {
 // number, supplier name, delivery date, and type are included; the contact
 // number is left out so less personal data leaves the system.
 // Skipped quietly if the email settings are missing.
-async function sendAdminEmail({ po_number, supplier, tentative_delivery_date, items }) {
+async function sendAdminEmail({ po_number, supplier, supplier_type, tentative_delivery_date, items }) {
   if (!process.env.RESEND_API_KEY || !process.env.ADMIN_ALERT_EMAIL) {
     console.warn('api/book: email alert skipped, RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set')
     return
@@ -133,6 +134,7 @@ async function sendAdminEmail({ po_number, supplier, tentative_delivery_date, it
     '',
     `P.O. number: ${po_number}`,
     `Supplier: ${supplier.replace(/[\r\n]+/g, ' ')}`,
+    `Scheduling: ${supplier_type === 'extension' ? 'Extension (open schedule)' : 'Regular'}`,
     `Delivery date: ${tentative_delivery_date}`,
     `Delivery type: ${deliveryType}`,
     `Submitted: ${submitted}`,
@@ -192,26 +194,62 @@ export async function POST(request) {
     : INTL_PHONE_RE.test(contact_number)
   if (!phoneOk) return fail('Please enter a valid contact number.')
 
-  const confirmation_po_date = clean(body.confirmation_po_date)
+  // Older clients that do not send a type are treated as regular suppliers.
+  const supplier_type = body.supplier_type === undefined ? 'regular' : clean(body.supplier_type)
+  if (!SUPPLIER_TYPES.includes(supplier_type)) return fail('Please choose a valid supplier type.')
+  const isExtension = supplier_type === 'extension'
+
   const tentative_delivery_date = clean(body.tentative_delivery_date)
-  if (!isRealDate(confirmation_po_date) || !isRealDate(tentative_delivery_date)) {
-    return fail('Please enter valid dates.')
+  if (!isRealDate(tentative_delivery_date)) return fail('Please enter a valid delivery date.')
+
+  // Admin date closures, read with the service role so the check cannot be
+  // skipped from the browser. If they cannot be read, the booking is
+  // refused rather than risk accepting a closed date.
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+  const { data: closures, error: closuresError } = await supabaseAdmin
+    .from('date_closures')
+    .select('start_date, end_date, reason')
+    .lte('start_date', tentative_delivery_date)
+    .gte('end_date', tentative_delivery_date)
+  if (closuresError) {
+    console.error('api/book: could not read date closures', closuresError)
+    return fail('Could not check the delivery calendar. Please try again.', 500)
   }
+
+  // Both types fill in the confirmation date, terms and count type.
+  const confirmation_po_date = clean(body.confirmation_po_date)
+  if (!isRealDate(confirmation_po_date)) return fail('Please enter valid dates.')
 
   const termDays = Number(body.delivery_terms)
   if (!Number.isInteger(termDays) || termDays < 1 || termDays > 365) {
     return fail('Delivery terms must be a whole number of days from 1 to 365.')
   }
+  const delivery_terms = String(termDays)
 
   const count_type = clean(body.count_type)
   if (count_type !== 'calendar' && count_type !== 'working') {
     return fail('Please choose Calendar Days or Working Days.')
   }
 
-  // Same delivery window logic the form uses (lib/holidays.js)
-  const window = getDeliveryWindow(confirmation_po_date, termDays, count_type)
-  if (!window || !isSelectableDeliveryDate(tentative_delivery_date, window, count_type)) {
-    return fail('The delivery date is outside the allowed delivery period.')
+  if (isExtension) {
+    // Extension: no delivery window and no end date. Monday to Friday,
+    // not a Philippine holiday, not in the past, not an admin closure.
+    const blocked = getExtensionBlockReason(tentative_delivery_date, closures)
+    if (blocked) return fail(blocked)
+  } else {
+    // ---- Regular suppliers: unchanged rules ----
+    // Same delivery window logic the form uses (lib/holidays.js)
+    const window = getDeliveryWindow(confirmation_po_date, termDays, count_type)
+    if (!window || !isSelectableDeliveryDate(tentative_delivery_date, window, count_type)) {
+      return fail('The delivery date is outside the allowed delivery period.')
+    }
+
+    // Closed dates are off limits for regular suppliers too.
+    const closure = findClosure(tentative_delivery_date, closures)
+    if (closure) return fail(`That date is closed: ${closure.reason}.`)
   }
 
   const { items, error: itemsError } = validateItems(body.items)
@@ -225,17 +263,13 @@ export async function POST(request) {
   }
 
   // ---- Save. Only these fields are written; status is always pending ----
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  )
-
   const { error } = await supabaseAdmin.from('appointments').insert([
     {
       po_number,
       supplier,
+      supplier_type,
       confirmation_po_date,
-      delivery_terms: String(termDays),
+      delivery_terms,
       count_type,
       tentative_delivery_date,
       contact_number,
@@ -252,7 +286,7 @@ export async function POST(request) {
   // Alert the admin. A failed email must never fail the booking, which is
   // already saved at this point.
   try {
-    await sendAdminEmail({ po_number, supplier, tentative_delivery_date, items })
+    await sendAdminEmail({ po_number, supplier, supplier_type, tentative_delivery_date, items })
   } catch (err) {
     console.error('api/book: admin alert email failed', err)
   }

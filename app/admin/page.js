@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar'
 import format from 'date-fns/format'
@@ -11,7 +11,9 @@ import { toast } from 'sonner'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { supabase } from '@/lib/supabaseClient'
 import { getHoliday } from '@/lib/holidays'
+import { findClosure } from '@/lib/scheduling'
 import HospitalHeader from '@/components/HospitalHeader'
+import ClosureManager from '@/components/ClosureManager'
 import './calendar.css'
 
 const locales = {}
@@ -50,14 +52,19 @@ function getDeliveryType(appt) {
 
 // Date number in each month cell, plus the holiday name when there is one.
 // react-big-calendar passes `isOffRange` for days of the neighbouring months.
-function CustomDateHeader({ date, label, isOffRange }) {
-  const holiday = getHoliday(format(date, 'yyyy-MM-dd'))
-  return (
-    <div className="cal-date">
-      <span className={isOffRange ? 'cal-num cal-num-off' : 'cal-num'}>{label}</span>
-      {holiday && <span className="cal-holiday" title={holiday.name}>{holiday.name}</span>}
-    </div>
-  )
+function makeDateHeader(closures) {
+  return function CustomDateHeader({ date, label, isOffRange }) {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const holiday = getHoliday(dateStr)
+    const closure = findClosure(dateStr, closures)
+    return (
+      <div className="cal-date">
+        <span className={isOffRange ? 'cal-num cal-num-off' : 'cal-num'}>{label}</span>
+        {holiday && <span className="cal-holiday" title={holiday.name}>{holiday.name}</span>}
+        {closure && <span className="cal-closed" title={closure.reason}>{closure.reason}</span>}
+      </div>
+    )
+  }
 }
 
 // Replaces react-big-calendar's toolbar: month name on the left, three
@@ -104,6 +111,10 @@ export default function AdminPage() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [newestFirst, setNewestFirst] = useState(true)
   const [listQuery, setListQuery] = useState('')
+  const [closures, setClosures] = useState([])
+  const [closuresOpen, setClosuresOpen] = useState(false)
+  // Rebuilt only when closures change, so the calendar's date cells are not remounted on every render.
+  const dateHeader = useMemo(() => makeDateHeader(closures), [closures])
 
   useEffect(() => {
     async function checkAuth() {
@@ -145,6 +156,19 @@ export default function AdminPage() {
     loadAppointments()
   }, [])
 
+  useEffect(() => {
+    async function loadClosures() {
+      const { data, error } = await supabase.from('date_closures').select('*').order('start_date')
+      if (error) {
+        console.error(error)
+        toast.error('Could not load the blocked dates. Please refresh the page.')
+        return
+      }
+      setClosures(data)
+    }
+    loadClosures()
+  }, [])
+
   function openAppt(appt) {
     setConfirmingDelete(false)
     setSelectedAppt(appt)
@@ -159,13 +183,14 @@ export default function AdminPage() {
   useEffect(() => {
     function onKey(e) {
       if (e.key !== 'Escape') return
+      if (closuresOpen) return // the closure dialog handles its own Escape
       if (selectedAppt) closeAppt()
       else if (moreEvents) setMoreEvents(null)
       else if (panelOpen) setPanelOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedAppt, moreEvents, panelOpen])
+  }, [selectedAppt, moreEvents, panelOpen, closuresOpen])
 
   // Stop the page behind a popup from scrolling.
   useEffect(() => {
@@ -254,6 +279,9 @@ export default function AdminPage() {
         <button type="button" className="btn btn-quiet btn-sm" onClick={() => setPanelOpen((open) => !open)}>
           {panelOpen ? 'Hide list' : <><span className="sm:hidden">List</span><span className="hidden sm:inline">Appointment list</span></>}
         </button>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={() => setClosuresOpen(true)}>
+          Block date
+        </button>
         <button type="button" className="navlink" onClick={handleLogout}>Log out</button>
       </HospitalHeader>
 
@@ -276,10 +304,12 @@ export default function AdminPage() {
               defaultView="month"
               date={currentDate}
               onNavigate={(newDate) => setCurrentDate(newDate)}
-              components={{ month: { dateHeader: CustomDateHeader }, event: CustomEvent, toolbar: CustomToolbar }}
+              components={{ month: { dateHeader }, event: CustomEvent, toolbar: CustomToolbar }}
               dayPropGetter={(date) => {
-                const holiday = getHoliday(format(date, 'yyyy-MM-dd'))
+                const dateStr = format(date, 'yyyy-MM-dd')
+                const holiday = getHoliday(dateStr)
                 const day = date.getDay() // 0 = Sun, 6 = Sat
+                if (findClosure(dateStr, closures)) return { style: { backgroundColor: '#fde8c8' } }
                 if (holiday) return { style: { backgroundColor: '#fbe3e0' } }
                 if (day === 0 || day === 6) return { style: { backgroundColor: '#e9eeea' } }
                 return {}
@@ -299,6 +329,7 @@ export default function AdminPage() {
           <span className="inline-flex items-center"><span className="dot" style={{ background: STATUS_STYLE.delivered.bg }} />Delivered</span>
           <span className="inline-flex items-center"><span className="dot" style={{ background: '#e9eeea', boxShadow: 'inset 0 0 0 1px #b9c4bc' }} />Weekend</span>
           <span className="inline-flex items-center"><span className="dot" style={{ background: '#fbe3e0', boxShadow: 'inset 0 0 0 1px #e8b4ad' }} />Holiday</span>
+          <span className="inline-flex items-center"><span className="dot" style={{ background: '#fde8c8', boxShadow: 'inset 0 0 0 1px #e6bd80' }} />Blocked by admin</span>
         </div>
       </main>
 
@@ -341,6 +372,7 @@ export default function AdminPage() {
 
               <dl className="facts">
                 <div className="fact"><dt>Delivery date</dt><dd>{formatDay(selectedAppt.tentative_delivery_date)}</dd></div>
+                <div className="fact"><dt>Scheduling</dt><dd>{selectedAppt.supplier_type === 'extension' ? 'Extension (open schedule)' : 'Regular'}</dd></div>
                 {getDeliveryType(selectedAppt) && (
                   <div className="fact"><dt>Delivery type</dt><dd>{getDeliveryType(selectedAppt)}</dd></div>
                 )}
@@ -395,6 +427,15 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {closuresOpen && (
+        <ClosureManager
+          closures={closures}
+          appointments={events.map((e) => e.resource)}
+          onChange={setClosures}
+          onClose={() => setClosuresOpen(false)}
+        />
       )}
 
       {/* "+N more" list for a busy day */}

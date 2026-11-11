@@ -2,6 +2,21 @@ import Image from 'next/image'
 import Link from 'next/link'
 import HospitalHeader from '@/components/HospitalHeader'
  
+const ANNOUNCEMENTS = [
+  {
+    src: '/mms-announcement.jpg',
+    alt: 'Materials Management Section announcement',
+    width: 1190,
+    height: 1322,
+  },
+  {
+    src: '/mms-announcement2.jpg',
+    alt: 'Announcement: strict compliance with delivery terms and imposition of liquidated damages. Liquidated damages are 0.1 percent of the cost of the delayed goods for every calendar day of delay, and the contract may be rescinded at 10 percent. Requests for extension must be filed in writing before the delivery deadline.',
+    width: 1189,
+    height: 1323,
+  },
+]
+ 
 const READY = [
   {
     title: 'The P.O. number',
@@ -50,14 +65,27 @@ export default function HomePage() {
               <span className="announcement-kicker">Materials Management Section</span>
               <h2 id="announcement-title">Announcement</h2>
             </div>
-            <Image
-              src="/mms-announcement.jpg"
-              alt="Materials Management Section announcement"
-              width={1600}
-              height={1000}
-              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 90vw, 1200px"
-              className="announcement-image"
-            />
+            <div className="announcement-grid">
+              {ANNOUNCEMENTS.map((a) => (
+                <a
+                  key={a.src}
+                  href={a.src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="announcement-link"
+                  aria-label="Open this announcement full size in a new tab"
+                >
+                  <Image
+                    src={a.src}
+                    alt={a.alt}
+                    width={a.width}
+                    height={a.height}
+                    sizes="(max-width: 900px) 100vw, 600px"
+                    className="announcement-image"
+                  />
+                </a>
+              ))}
+            </div>
           </div>
         </section>
  
@@ -146,4 +174,3 @@ export default function HomePage() {
     </>
   )
 }
- 

@@ -22,6 +22,10 @@
 .react-datepicker__day--today { box-shadow: inset 0 -3px 0 var(--green); }
 .react-datepicker__portal { background: rgba(13, 27, 18, 0.5); }
  
+/* Dates closed by the admin: shaded red, tappable to see the reason */
+.react-datepicker__day.dp-closed { background: #fbe3e0 !important; color: var(--danger) !important; font-weight: 600; cursor: help; }
+.dp-closed-day { display: block; width: 100%; height: 100%; }
+ 
 @media (max-width: 24rem) {
   .react-datepicker__day-name, .react-datepicker__day { width: 2.25rem; line-height: 2.25rem; margin: 0.05rem; }
 }

@@ -28,6 +28,7 @@
 .cal-date { text-align: right; }
 .cal-num { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
 .cal-num-off { color: #8b988f; }
+.cal-closed { display: block; font-size: 0.6875rem; line-height: 1.15; font-weight: 600; color: #8a4b00; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-holiday { display: block; font-size: 0.6875rem; line-height: 1.15; font-weight: 600; color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
  
 /* Appointments: flat blocks coloured by status */
@@ -49,7 +50,7 @@
   .cal-nav button { padding: 0 0.75rem; }
   .rbc-header { font-size: 0.6875rem; padding: 0.5rem 0; }
   .rbc-date-cell { padding: 0.25rem; }
-  .cal-holiday { display: none; }
+  .cal-holiday, .cal-closed { display: none; }
   .rbc-event { min-height: 20px; padding: 1px 3px; font-size: 0.625rem; line-height: 18px; }
   .evt-po { display: none; }
 }
